@@ -1,0 +1,196 @@
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
+import Link from 'next/link';
+import Image from 'next/image';
+
+export default function EventReturn() {
+  const router = useRouter();
+  const { id } = router.query;
+  
+  const [event, setEvent] = useState(null);
+  const [deviceConditions, setDeviceConditions] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  
+  useEffect(() => {
+    if (id) {
+      fetchEvent();
+    }
+  }, [id]);
+  
+  useEffect(() => {
+    if (event && event.eventDevices) {
+      // Initialize device conditions
+      setDeviceConditions(
+        event.eventDevices.map(ed => ({
+          deviceId: ed.device.id,
+          condition: 'normal'
+        }))
+      );
+    }
+  }, [event]);
+  
+  const fetchEvent = async () => {
+    try {
+      const response = await fetch(`/api/events/${id}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch event details');
+      }
+      
+      const data = await response.json();
+      
+      // Check if the event is already completed
+      if (data.status === 'completed') {
+        router.replace(`/events/${id || ''}`); // Redirect to event detail page
+        return;
+      }
+      
+      setEvent(data);
+    } catch (err) {
+      console.error('Error fetching event:', err);
+      setError('Failed to load event details. Please try again later.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleConditionChange = (deviceId, condition) => {
+    setDeviceConditions(prev => 
+      prev.map(item => 
+        item.deviceId === deviceId 
+          ? { ...item, condition } 
+          : item
+      )
+    );
+  };
+  
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError('');
+    
+    try {
+      const response = await fetch(`/api/events/${id}/return`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ deviceConditions }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Không thể cập nhật trạng thái thiết bị');
+      }
+      
+      router.push('/events');
+    } catch (err) {
+      console.error('Error returning devices:', err);
+      setError(err.message || 'Không thể cập nhật trạng thái. Vui lòng thử lại.');
+      setIsSubmitting(false);
+    }
+  };
+
+  if (isLoading) return <div className="text-center py-8">Đang tải thông tin...</div>;
+  if (!event) return <div className="text-center py-8">Không tìm thấy phiếu</div>;
+
+  return (
+    <div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Xác thực trả thiết bị sau sự kiện</h1>
+        <p className="text-gray-600 mt-1">
+          Phiếu #{id.substring(0, 8)} - Do {event.creator.name} tạo
+        </p>
+      </div>
+      
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md">
+          {error}
+        </div>
+      )}
+      
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h2 className="text-lg font-medium mb-4">Kiểm tra điều kiện thiết bị</h2>
+          
+          <div className="divide-y divide-gray-200">
+            {event.eventDevices.map(eventDevice => (
+              <div key={eventDevice.id} className="py-4 first:pt-0 last:pb-0">
+                <div className="flex items-start">
+                  <div className="w-16 h-16 flex-shrink-0 relative rounded-md overflow-hidden">
+                    {eventDevice.device.image ? (
+                      <Image 
+                        src={eventDevice.device.image}
+                        alt={eventDevice.device.name}
+                        fill
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="bg-gray-100 w-full h-full flex items-center justify-center">
+                        <span className="text-gray-400 text-xs">No image</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="ml-4 flex-1">
+                    <h4 className="text-lg font-medium">
+                      {eventDevice.device.name}
+                    </h4>
+                    
+                    <div className="mt-2">
+                      <p className="text-sm text-gray-500 mb-1">Tình trạng:</p>
+                      <div className="flex space-x-4">
+                        <label className="inline-flex items-center">
+                          <input
+                            type="radio"
+                            name={`condition-${eventDevice.device.id}`}
+                            value="normal"
+                            checked={
+                              deviceConditions.find(dc => dc.deviceId === eventDevice.device.id)?.condition === 'normal'
+                            }
+                            onChange={() => handleConditionChange(eventDevice.device.id, 'normal')}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                          />
+                          <span className="ml-2 text-sm text-gray-700">Bình thường</span>
+                        </label>
+                        
+                        <label className="inline-flex items-center">
+                          <input
+                            type="radio"
+                            name={`condition-${eventDevice.device.id}`}
+                            value="damaged"
+                            checked={
+                              deviceConditions.find(dc => dc.deviceId === eventDevice.device.id)?.condition === 'damaged'
+                            }
+                            onChange={() => handleConditionChange(eventDevice.device.id, 'damaged')}
+                            className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300"
+                          />
+                          <span className="ml-2 text-sm text-gray-700">Hỏng</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        <div className="flex justify-end space-x-3">
+          <Link href={`/events/${id}`} className="btn-secondary">
+            Hủy
+          </Link>
+          <button
+            type="submit"
+            className="btn"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Đang lưu xác nhận...' : 'Xác nhận trả'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}

@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:../dev.db"
+}
+
+model Device {
+  id             String          @id @default(uuid())
+  name           String
+  image          String?
+  locationImage  String?
+  status         String          @default("available") // "available" or "borrowed"
+  borrowerId     String?
+  borrowContext  String?         // "personal" or "event"
+  eventId        String?
+  purchaseDate   String?
+  warrantyEnd    String?
+  warrantyPlace  String?
+  notes          String?
+  borrower       User?           @relation("BorrowedDevices", fields: [borrowerId], references: [id])
+  event          Event?          @relation("EventDevices", fields: [eventId], references: [id])
+  borrowHistory  BorrowHistory[] @relation("DeviceBorrowHistory")
+  eventDevices   EventDevice[]   @relation("EventDeviceItems")
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  
+  @@index([borrowerId])
+  @@index([eventId])
+}
+
+model User {
+  id                String          @id @default(uuid())
+  name              String
+  phone             String          @unique
+  email             String?         @unique
+  password          String
+  role              String          @default("user") // "admin" or "user"
+  borrowedDevices   Device[]        @relation("BorrowedDevices")
+  borrowHistory     BorrowHistory[] @relation("UserBorrowHistory")
+  transferredToHistory BorrowHistory[] @relation("TransferredTo")
+  transferredFromHistory BorrowHistory[] @relation("TransferredFrom")
+  createdEvents     Event[]         @relation("EventCreator")
+  updatedEvents     Event[]         @relation("EventUpdater")
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+}
+
+model BorrowHistory {
+  id          String    @id @default(uuid())
+  deviceId    String
+  userId      String
+  borrowDate  DateTime  @default(now())
+  returnDate  DateTime?
+  transferToId String?
+  transferFromId String?
+  transferStatus String? @default("pending") // "pending", "accepted", "rejected"
+  borrowContext String  @default("personal") // "personal" or "event"
+  eventId     String?
+  device      Device    @relation("DeviceBorrowHistory", fields: [deviceId], references: [id])
+  user        User      @relation("UserBorrowHistory", fields: [userId], references: [id])
+  transferTo  User?     @relation("TransferredTo", fields: [transferToId], references: [id])
+  transferFrom User?    @relation("TransferredFrom", fields: [transferFromId], references: [id])
+  event       Event?    @relation("EventBorrowHistory", fields: [eventId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([deviceId])
+  @@index([userId])
+  @@index([eventId])
+  @@index([transferToId])
+  @@index([transferFromId])
+}
+
+model Event {
+  id           String           @id @default(uuid())
+  title        String
+  description  String?
+  createdDate  DateTime         @default(now())
+  returnedDate DateTime?
+  status       String           @default("ongoing") // "ongoing" or "completed"
+  creatorId    String
+  updaterId    String?
+  creator      User             @relation("EventCreator", fields: [creatorId], references: [id])
+  updater      User?            @relation("EventUpdater", fields: [updaterId], references: [id])
+  eventDevices EventDevice[]    @relation("EventDevicesRelation")
+  devices      Device[]         @relation("EventDevices")
+  borrowHistory BorrowHistory[] @relation("EventBorrowHistory")
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([creatorId])
+  @@index([updaterId])
+}
+
+model EventDevice {
+  id        String   @id @default(uuid())
+  eventId   String
+  deviceId  String
+  condition String?  // "normal" or "damaged"
+  event     Event    @relation("EventDevicesRelation", fields: [eventId], references: [id], onDelete: Cascade)
+  device    Device   @relation("EventDeviceItems", fields: [deviceId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([eventId])
+  @@index([deviceId])
+}
