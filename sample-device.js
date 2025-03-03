@@ -17,7 +17,7 @@ async function main() {
     const sampleDevices = [
       {
         name: 'Máy quay Canon EOS R5',
-        image: '/uploads/sample-camera.jpg', // Cần có file này trong thư mục public/uploads
+        image: 'https://congngheviet.com/wp-content/uploads/2020/07/Canon-EOS-R5-Official.jpg', // Cần có file này trong thư mục public/uploads
         purchaseDate: '2023-01-15',
         warrantyEnd: '2025-01-15',
         warrantyPlace: 'Canon Việt Nam',
@@ -25,7 +25,7 @@ async function main() {
       },
       {
         name: 'Micro không dây Rode Wireless GO II',
-        image: '/uploads/sample-mic.jpg', // Cần có file này trong thư mục public/uploads
+        image: 'https://pos.nvncdn.com/3d97f1-13296/ps/20231025_zWEfTKX73m.webp', // Cần có file này trong thư mục public/uploads
         purchaseDate: '2023-03-10',
         warrantyEnd: '2025-03-10',
         warrantyPlace: 'Rode Việt Nam',
@@ -41,7 +41,7 @@ async function main() {
       },
       {
         name: 'Tripod Manfrotto 055XPRO3',
-        image: '/uploads/sample-tripod.jpg', // Cần có file này trong thư mục public/uploads
+        image: 'https://www.bhphotovideo.com/images/fb/manfrotto_mt055xpro3_aluminum_tripod_stand_alone_1060591.jpg', // Cần có file này trong thư mục public/uploads
         purchaseDate: '2023-04-05',
         warrantyEnd: '2026-04-05',
         warrantyPlace: 'Manfrotto Việt Nam',
@@ -49,7 +49,7 @@ async function main() {
       },
       {
         name: 'Gimbal DJI RS 2',
-        image: '/uploads/sample-gimbal.jpg', // Cần có file này trong thư mục public/uploads
+        image: 'https://product.hstatic.net/200000388631/product/1_7fde25015eba4c51aa0e2d5b5bbc9b32_master.jpg', // Cần có file này trong thư mục public/uploads
         purchaseDate: '2023-05-12',
         warrantyEnd: '2025-05-12',
         warrantyPlace: 'DJI Store',
