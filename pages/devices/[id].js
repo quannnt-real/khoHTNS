@@ -279,7 +279,7 @@ export default function DeviceDetail() {
           <button onClick={handleDeleteDevice} className="btn-danger">
             Delete
           </button>
-          <Link href="/" className="btn mt-4 inline-block">
+          <Link href="/" className="btn inline-block">
             Quay lại
           </Link>
         </div>
