@@ -308,12 +308,27 @@ export default function DeviceDetail() {
             <div className="flex justify-between mb-4">
               <div>
                 <h2 className="text-xl font-semibold">{device.name}</h2>
-                <p className="mt-1 text-gray-600">
-                  Trạng thái: <span className={`font-medium ${device.status === 'available' ? 'text-blue-600' : 'text-red-600'}`}>
+                <div className="flex flex-wrap mt-2 gap-2">
+                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                    device.status === 'available' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  }`}>
                     {device.status === 'available' ? 'Có Sẵn' : 'Đang Mượn'}
                   </span>
-                </p>
+                  
+                  {device.borrowHistory && device.borrowHistory.length > 0 && device.borrowHistory[0].returnDate && (
+                    <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                      Đã Trả
+                    </span>
+                  )}
+                  
+                  {device.borrowHistory && device.borrowHistory.length > 0 && device.borrowHistory[0].transferTo && (
+                    <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
+                      Đã Chuyển
+                    </span>
+                  )}
+                </div>
               </div>
+              
               <div className="flex space-x-2">
                 {device.status === 'available' ? (
                   <button onClick={handleBorrow} className="btn">
@@ -333,10 +348,59 @@ export default function DeviceDetail() {
             </div>
             
             {device.borrower && (
-              <div className="mb-4 p-3 bg-blue-100 rounded-md">
-                <p className="text-blue-700">
-                  <span className="font-medium">Người mượn:</span> {device.borrower.name} ({device.borrower.phone})
-                </p>
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-md">
+                <div className="flex items-center mb-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                  </svg>
+                  <h3 className="text-md font-semibold text-gray-900">Thông tin phiếu mượn</h3>
+                </div>
+                
+                <div className="pl-7 grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                  <div>
+                    <p className="text-sm text-gray-600 font-medium">Người mượn:</p>
+                    <p className="text-sm text-gray-800">{device.borrower.name} ({device.borrower.phone})</p>
+                  </div>
+                  
+                  {device.borrowHistory && device.borrowHistory.length > 0 && (
+                    <div>
+                      <p className="text-sm text-gray-600 font-medium">Thời gian mượn:</p>
+                      <p className="text-sm text-gray-800">
+                        {new Date(device.borrowHistory[0].borrowDate).toLocaleDateString('vi-VN', {
+                          year: 'numeric',
+                          month: 'numeric',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {device.borrowHistory && device.borrowHistory.length > 0 && device.borrowHistory[0].returnDate && (
+                    <div>
+                      <p className="text-sm text-gray-600 font-medium">Thời gian trả:</p>
+                      <p className="text-sm text-gray-800">
+                        {new Date(device.borrowHistory[0].returnDate).toLocaleDateString('vi-VN', {
+                          year: 'numeric',
+                          month: 'numeric',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {device.borrowHistory && device.borrowHistory.length > 0 && device.borrowHistory[0].transferTo && (
+                    <div>
+                      <p className="text-sm text-gray-600 font-medium">Đã chuyển cho:</p>
+                      <p className="text-sm text-gray-800">
+                        {device.borrowHistory[0].transferTo.name} ({device.borrowHistory[0].transferTo.phone})
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
             
@@ -390,7 +454,7 @@ export default function DeviceDetail() {
       
       {device.borrowHistory && device.borrowHistory.length > 0 && (
         <div className="mt-8">
-          <h2 className="text-xl font-bold mb-4">Lịch sử mượn</h2>
+          <h2 className="text-xl font-bold mb-4">Lịch sử mượn trả</h2>
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -406,7 +470,10 @@ export default function DeviceDetail() {
                       Ngày trả
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Đã chuyển cho
+                      Trạng thái
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Ghi chú
                     </th>
                   </tr>
                 </thead>
@@ -418,13 +485,58 @@ export default function DeviceDetail() {
                         <div className="text-sm text-gray-500">{history.user.phone}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(history.borrowDate).toLocaleDateString()}
+                        {new Date(history.borrowDate).toLocaleDateString('vi-VN', {
+                          year: 'numeric',
+                          month: 'numeric',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {history.returnDate ? new Date(history.returnDate).toLocaleDateString() : '—'}
+                        {history.returnDate ? 
+                          new Date(history.returnDate).toLocaleDateString('vi-VN', {
+                            year: 'numeric',
+                            month: 'numeric',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          }) : '—'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {history.returnDate ? (
+                          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                            Đã trả
+                          </span>
+                        ) : history.transferTo ? (
+                          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
+                            Đã chuyển
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
+                            Đang mượn
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {history.transferTo ? history.transferTo.name : '—'}
+                        {history.transferTo ? (
+                          <div className="flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-purple-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8z" />
+                              <path d="M12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z" />
+                            </svg>
+                            <span>Chuyển cho {history.transferTo.name}</span>
+                          </div>
+                        ) : history.returnDate ? (
+                          <div className="flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                            <span>Trả đúng hạn</span>
+                          </div>
+                        ) : (
+                          '—'
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -454,59 +566,153 @@ export default function DeviceDetail() {
       {/* Return Modal */}
       {showReturnModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-lg font-medium mb-4">Trả thiết bị {device.name}</h3>
+          <div className="bg-white rounded-lg max-w-lg w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h3 className="text-lg font-medium">Xác nhận trả thiết bị</h3>
+              </div>
+              <button 
+                onClick={() => setShowReturnModal(false)} 
+                className="text-gray-400 hover:text-gray-500"
+                disabled={actionLoading}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
             
             {actionError && (
-              <div className="mb-4 p-2 bg-red-50 text-red-700 rounded-md text-sm">
-                {actionError}
+              <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-md text-sm">
+                <div className="flex">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <span>{actionError}</span>
+                </div>
               </div>
             )}
             
+            <div className="bg-blue-50 p-4 rounded-md mb-6">
+              <div className="flex items-center mb-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <span className="text-blue-700 font-medium">Thông tin thiết bị đang trả</span>
+              </div>
+              
+              <div className="ml-7 grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <p className="text-sm text-gray-600 font-medium">Tên thiết bị:</p>
+                  <p className="text-sm text-gray-800">{device.name}</p>
+                </div>
+                
+                <div>
+                  <p className="text-sm text-gray-600 font-medium">Người mượn:</p>
+                  <p className="text-sm text-gray-800">{device.borrower?.name}</p>
+                </div>
+                
+                {device.borrowHistory && device.borrowHistory.length > 0 && (
+                  <div>
+                    <p className="text-sm text-gray-600 font-medium">Thời gian mượn:</p>
+                    <p className="text-sm text-gray-800">
+                      {new Date(device.borrowHistory[0].borrowDate).toLocaleDateString('vi-VN', {
+                        year: 'numeric',
+                        month: 'numeric',
+                        day: 'numeric'
+                      })}
+                    </p>
+                  </div>
+                )}
+                
+                <div>
+                  <p className="text-sm text-gray-600 font-medium">Thời gian trả:</p>
+                  <p className="text-sm text-gray-800">
+                    {new Date().toLocaleDateString('vi-VN', {
+                      year: 'numeric',
+                      month: 'numeric',
+                      day: 'numeric'
+                    })}
+                  </p>
+                </div>
+              </div>
+            </div>
+            
             <div className="mb-4">
-              <label className="form-label">Ảnh vị trí cất</label>
-              <div className="mt-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Ảnh vị trí cất
+                <span className="ml-1 text-red-500">*</span>
+              </label>
+              <div className="mt-1 border-2 border-dashed border-gray-300 rounded-md p-4">
                 {returnLocationImage ? (
-                  <div className="mb-2 relative h-40 w-full overflow-hidden rounded-md">
+                  <div className="mb-2 relative h-52 w-full overflow-hidden rounded-md">
                     <Image 
                       src={returnLocationImage}
-                      alt="Vị trí cất mới"
+                      alt="Vị trí cất thiết bị"
                       className="object-cover"
                       fill
                       unoptimized={true}
                     />
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500 mb-2">Chưa chọn ảnh</p>
+                  <div className="text-center p-6 bg-gray-50 rounded-md">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="mt-2 text-sm text-gray-500">Vui lòng chụp ảnh vị trí cất thiết bị</p>
+                  </div>
                 )}
                 
-                <label className="btn-secondary inline-block cursor-pointer">
-                  Chọn ảnh
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleImageUpload}
-                    disabled={actionLoading}
-                  />
-                </label>
+                <div className="mt-3 flex justify-center">
+                  <label className="btn inline-block cursor-pointer">
+                    {returnLocationImage ? 'Thay đổi ảnh' : 'Chọn ảnh'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageUpload}
+                      disabled={actionLoading}
+                    />
+                  </label>
+                </div>
               </div>
+              <p className="mt-2 text-xs text-gray-500">
+                Vui lòng chụp ảnh rõ ràng vị trí cất thiết bị để dễ dàng tìm kiếm sau này
+              </p>
             </div>
             
-            <div className="flex justify-end space-x-2 mt-6">
+            <div className="flex justify-end space-x-3 mt-6">
               <button 
                 onClick={() => setShowReturnModal(false)} 
-                className="btn-secondary"
+                className="btn-outline"
                 disabled={actionLoading}
               >
-                Hủy
+                Hủy bỏ
               </button>
               <button 
                 onClick={handleReturn} 
-                className="btn"
-                disabled={actionLoading}
+                className={`btn flex items-center ${!returnLocationImage ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={actionLoading || !returnLocationImage}
               >
-                {actionLoading ? 'Đang xử lý...' : 'Xác nhận trả'}
+                {actionLoading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Đang xử lý...
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    Xác nhận trả thiết bị
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -516,52 +722,162 @@ export default function DeviceDetail() {
       {/* Transfer Modal */}
       {showTransferModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-lg font-medium mb-4">Transfer {device.name}</h3>
+          <div className="bg-white rounded-lg max-w-lg w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                <h3 className="text-lg font-medium">Chuyển thiết bị cho người khác</h3>
+              </div>
+              <button 
+                onClick={() => setShowTransferModal(false)} 
+                className="text-gray-400 hover:text-gray-500"
+                disabled={actionLoading}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
             
             {actionError && (
-              <div className="mb-4 p-2 bg-red-50 text-red-700 rounded-md text-sm">
-                {actionError}
+              <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-md text-sm">
+                <div className="flex">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <span>{actionError}</span>
+                </div>
               </div>
             )}
             
-            <div className="mb-4">
-              <p className="text-sm text-gray-600 mb-4">
-                Currently borrowed by: <span className="font-medium">{device.borrower?.name}</span>
-              </p>
+            <div className="bg-blue-50 p-4 rounded-md mb-6">
+              <div className="flex items-center mb-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <span className="text-blue-700 font-medium">Thông tin thiết bị đang chuyển</span>
+              </div>
               
-              <label htmlFor="transferUserId" className="form-label">Transfer To</label>
-              <select
-                id="transferUserId"
-                value={transferUserId}
-                onChange={(e) => setTransferUserId(e.target.value)}
-                className="form-input"
-                required
-              >
-                <option value="">Select a user</option>
-                {users
-                  .filter(user => user.id !== device.borrowerId)
-                  .map(user => (
-                    <option key={user.id} value={user.id}>{user.name} ({user.phone})</option>
-                  ))
-                }
-              </select>
+              <div className="ml-7 grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <p className="text-sm text-gray-600 font-medium">Tên thiết bị:</p>
+                  <p className="text-sm text-gray-800">{device.name}</p>
+                </div>
+                
+                <div>
+                  <p className="text-sm text-gray-600 font-medium">Người đang mượn:</p>
+                  <p className="text-sm text-gray-800">{device.borrower?.name} ({device.borrower?.phone})</p>
+                </div>
+                
+                {device.borrowHistory && device.borrowHistory.length > 0 && (
+                  <div>
+                    <p className="text-sm text-gray-600 font-medium">Thời gian mượn:</p>
+                    <p className="text-sm text-gray-800">
+                      {new Date(device.borrowHistory[0].borrowDate).toLocaleDateString('vi-VN', {
+                        year: 'numeric',
+                        month: 'numeric',
+                        day: 'numeric'
+                      })}
+                    </p>
+                  </div>
+                )}
+                
+                <div>
+                  <p className="text-sm text-gray-600 font-medium">Thời gian chuyển:</p>
+                  <p className="text-sm text-gray-800">
+                    {new Date().toLocaleDateString('vi-VN', {
+                      year: 'numeric',
+                      month: 'numeric',
+                      day: 'numeric'
+                    })}
+                  </p>
+                </div>
+              </div>
             </div>
             
-            <div className="flex justify-end space-x-2 mt-6">
+            <div className="mb-4">
+              <label htmlFor="transferUserId" className="block text-sm font-medium text-gray-700 mb-2">
+                Chọn người nhận
+                <span className="ml-1 text-red-500">*</span>
+              </label>
+              
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <select
+                  id="transferUserId"
+                  value={transferUserId}
+                  onChange={(e) => setTransferUserId(e.target.value)}
+                  className="block w-full pl-10 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                  required
+                >
+                  <option value="">-- Chọn người nhận --</option>
+                  {users
+                    .filter(user => user.id !== device.borrowerId)
+                    .map(user => (
+                      <option key={user.id} value={user.id}>{user.name} ({user.phone})</option>
+                    ))
+                  }
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                  <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </div>
+              
+              <p className="mt-2 text-xs text-gray-500">
+                Sau khi chuyển, người nhận sẽ chịu trách nhiệm với thiết bị này
+              </p>
+            </div>
+            
+            <div className="mt-2 p-3 bg-yellow-50 rounded-md text-sm text-yellow-700">
+              <div className="flex">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <span>
+                  Thao tác này sẽ chuyển trách nhiệm thiết bị từ <strong>{device.borrower?.name}</strong> sang người được chọn.
+                  Lịch sử mượn trả sẽ được ghi nhận.
+                </span>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6">
               <button 
                 onClick={() => setShowTransferModal(false)} 
-                className="btn-secondary"
+                className="btn-outline"
                 disabled={actionLoading}
               >
-                Cancel
+                Hủy bỏ
               </button>
               <button 
                 onClick={handleTransfer} 
-                className="btn"
-                disabled={actionLoading}
+                className={`btn flex items-center ${!transferUserId ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={actionLoading || !transferUserId}
               >
-                {actionLoading ? 'Processing...' : 'Confirm Transfer'}
+                {actionLoading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Đang xử lý...
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8z" />
+                      <path d="M12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z" />
+                    </svg>
+                    Xác nhận chuyển thiết bị
+                  </>
+                )}
               </button>
             </div>
           </div>
