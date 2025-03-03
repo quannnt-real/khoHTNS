@@ -33,7 +33,7 @@ async function main() {
       },
       {
         name: 'Đèn LED Godox SL-60W',
-        image: '/uploads/sample-light.jpg', // Cần có file này trong thư mục public/uploads
+        image: 'https://pos.nvncdn.com/7ffb4e-5058/ps/20231212_hadFhmF05u.jpeg', // Cần có file này trong thư mục public/uploads
         purchaseDate: '2023-02-20',
         warrantyEnd: '2024-02-20',
         warrantyPlace: 'Godox Store',
