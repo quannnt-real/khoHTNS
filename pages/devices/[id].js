@@ -24,20 +24,20 @@ export default function DeviceDetail() {
   
   useEffect(() => {
     // Add logging
-    console.log("Device ID from router:", id);
+    // console.log("Device ID from router:", id);
     
     if (id) {
-      console.log("Starting to fetch device and users data");
+      // console.log("Starting to fetch device and users data");
       fetchDevice();
       fetchUsers();
     } else {
-      console.log("No device ID available yet");
+      // console.log("No device ID available yet");
     }
   }, [id]);
   
   const fetchDevice = async () => {
     try {
-      console.log("Fetching device with ID:", id);
+      // console.log("Fetching device with ID:", id);
       const response = await fetch(`/api/devices/${id}`);
       
       if (!response.ok) {
@@ -46,7 +46,7 @@ export default function DeviceDetail() {
       }
       
       const data = await response.json();
-      console.log("Device data received:", data);
+      // console.log("Device data received:", data);
       setDevice(data);
     } catch (err) {
       console.error('Error fetching device:', err);
@@ -279,6 +279,9 @@ export default function DeviceDetail() {
           <button onClick={handleDeleteDevice} className="btn-danger">
             Delete
           </button>
+          <Link href="/" className="btn inline-block">
+            Quay lại
+          </Link>
         </div>
       </div>
       

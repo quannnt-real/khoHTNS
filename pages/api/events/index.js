@@ -7,7 +7,7 @@ export default async function handler(req, res) {
 
   try {
     // Đơn giản hóa query để tìm lỗi
-    console.log('Fetching events...');
+    // console.log('Fetching events...');
     
     const events = await prisma.event.findMany({
       select: {
@@ -37,7 +37,7 @@ export default async function handler(req, res) {
       }
     });
 
-    console.log('Events found:', events.length);
+    // console.log('Events found:', events.length);
     return res.status(200).json(events);
 
   } catch (error) {

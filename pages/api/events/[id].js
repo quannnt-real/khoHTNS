@@ -7,7 +7,7 @@ export default async function handler(req, res) {
 
   try {
     const { id } = req.query;
-    console.log('Fetching event:', id);
+    // console.log('Fetching event:', id);
 
     const event = await prisma.event.findUnique({
       where: { id },
@@ -35,13 +35,13 @@ export default async function handler(req, res) {
     });
 
     if (!event) {
-      console.log('Event not found:', id);
+      // console.log('Event not found:', id);
       return res.status(404).json({ 
         message: 'Không tìm thấy sự kiện' 
       });
     }
 
-    console.log('Event found:', event.id);
+    // console.log('Event found:', event.id);
     return res.json(event);
 
   } catch (error) {

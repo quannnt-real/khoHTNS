@@ -12,7 +12,21 @@ export default async function handler(req, res) {
         name: true,
         phone: true,
         email: true,
-        role: true
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+        borrowedDevices: {
+          select: {
+            id: true,
+            name: true,
+            image: true
+          }
+        },
+        _count: {
+          select: {
+            borrowedDevices: true
+          }
+        }
       },
       orderBy: {
         name: 'asc'

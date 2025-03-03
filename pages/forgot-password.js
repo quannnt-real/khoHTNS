@@ -35,7 +35,7 @@ export default function ForgotPassword() {
       // Save token for development purposes
       // In production, this would be sent via SMS to the user
       if (data.token) {
-        console.log('Development token:', data.token);
+        // console.log('Development token:', data.token);
         setToken(data.token);
       }
 

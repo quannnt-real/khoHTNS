@@ -8,7 +8,7 @@ export default function DeviceDetail() {
   const router = useRouter();
   const { id } = router.query;
   
-  console.log("DETAIL PAGE - Device ID from router:", id);
+  // console.log("DETAIL PAGE - Device ID from router:", id);
   
   const [device, setDevice] = useState(null);
   const [users, setUsers] = useState([]);
@@ -34,7 +34,7 @@ export default function DeviceDetail() {
   
   const fetchDevice = async () => {
     try {
-      console.log("Fetching device with ID:", id);
+      // console.log("Fetching device with ID:", id);
       const response = await fetch(`/api/devices/${id}`);
       
       if (!response.ok) {
@@ -43,7 +43,7 @@ export default function DeviceDetail() {
       }
       
       const data = await response.json();
-      console.log("Device data received:", data);
+      // console.log("Device data received:", data);
       setDevice(data);
     } catch (err) {
       console.error('Error fetching device:', err);

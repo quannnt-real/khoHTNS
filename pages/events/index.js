@@ -28,7 +28,7 @@ export default function Events() {
       }
       
       const data = await response.json();
-      console.log('Fetched events:', data);
+      // console.log('Fetched events:', data);
       setEvents(data);
       
     } catch (err) {
