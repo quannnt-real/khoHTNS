@@ -85,7 +85,7 @@ export default function EventDetail() {
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
               event.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
             }`}>
-              {event.status === 'completed' ? 'Đã hoàn thành' : 'Đang diễn ra'}
+              {event.status === 'completed' ? 'Đã hoàn trả ' + event.eventDevices.length  + ' thiết bị' : 'Sự kiện vẫn đang diễn ra'}
             </span>
           </div>
           
@@ -158,6 +158,11 @@ export default function EventDetail() {
                       Status: <span className={`font-medium ${eventDevice.device.status === 'available' ? 'text-green-600' : 'text-red-600'}`}>
                         {eventDevice.device.status}
                       </span>
+                      {event.status === 'completed' && (
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800`}>
+                           Đã hoàn trả sau sự kiện
+                        </span>
+                      )}
                     </p>
                     
                     {eventDevice.device.borrower && (
