@@ -13,7 +13,7 @@ const DeviceCard = ({ device }) => {
   
   // Default image if none is provided
   const imageUrl = device.image ? device.image : '/placeholder-device.jpg';
-  console.log('Device image URL:', imageUrl, 'for device:', device.name);
+  // console.log('Device image URL:', imageUrl, 'for device:', device.name);
   
   return (
     <Link href={`/devices/${device.id}`} className="card group hover:transform hover:scale-[1.01] transition-all duration-200">

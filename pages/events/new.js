@@ -8,6 +8,7 @@ export default function NewEvent() {
   
   const [devices, setDevices] = useState([]);
   const [selectedDevices, setSelectedDevices] = useState([]);
+  const [title, setTitle] = useState(''); // Thêm state cho title
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -34,12 +35,14 @@ export default function NewEvent() {
     }
   };
   
-  const toggleDeviceSelection = (deviceId) => {
+  const toggleDeviceSelection = (device) => {
     setSelectedDevices(prev => {
-      if (prev.includes(deviceId)) {
-        return prev.filter(id => id !== deviceId);
+      const isSelected = prev.some(d => d.id === device.id);
+      
+      if (isSelected) {
+        return prev.filter(d => d.id !== device.id);
       } else {
-        return [...prev, deviceId];
+        return [...prev, device];
       }
     });
   };
@@ -49,6 +52,11 @@ export default function NewEvent() {
     
     if (selectedDevices.length === 0) {
       setError('Vui lòng chọn ít nhất một thiết bị');
+      return;
+    }
+    
+    if (!title) {
+      setError('Vui lòng nhập tiêu đề phiếu mượn');
       return;
     }
     
@@ -69,7 +77,8 @@ export default function NewEvent() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          deviceIds: selectedDevices,
+          title: title,
+          deviceIds: selectedDevices.map(device => device.id),
           creatorId: user.id  // Sử dụng ID của người dùng đang đăng nhập
         }),
       });
@@ -84,6 +93,7 @@ export default function NewEvent() {
     } catch (err) {
       console.error('Error creating event:', err);
       setError(err.message || 'Lỗi khi tạo phiếu mượn. Vui lòng thử lại.');
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -109,6 +119,28 @@ export default function NewEvent() {
       )}
       
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Thêm phần nhập thông tin cơ bản */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h2 className="text-lg font-medium mb-4">Thông tin sự kiện</h2>
+          
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+                Tên sự kiện <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                id="title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                placeholder="Nhập tên sự kiện"
+                required
+              />
+            </div>
+          </div>
+        </div>
+        
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h2 className="text-lg font-medium mb-4">Chọn thiết bị mượn</h2>
           
@@ -130,7 +162,7 @@ export default function NewEvent() {
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
             {devices.map(device => {
-              const isSelected = selectedDevices.includes(device.id);
+              const isSelected = selectedDevices.some(d => d.id === device.id);
               const isAvailable = device.status === 'available';
               
               return (
@@ -160,7 +192,7 @@ export default function NewEvent() {
                       <h3 className="text-sm font-medium">{device.name}</h3>
                       <p className="text-xs text-gray-500 mt-1">
                         Trạng thái: <span className={`font-medium ${isAvailable ? 'text-green-600' : 'text-red-600'}`}>
-                          {device.status}
+                          {isAvailable ? 'Có sẵn' : 'Đang được mượn'}
                         </span>
                       </p>
                       {device.borrower && (
@@ -174,7 +206,7 @@ export default function NewEvent() {
                       <input
                         type="checkbox"
                         checked={isSelected}
-                        onChange={() => toggleDeviceSelection(device.id)}
+                        onChange={() => toggleDeviceSelection(device)}
                         className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                         disabled={!isAvailable}
                       />
@@ -201,7 +233,7 @@ export default function NewEvent() {
             className="btn"
             disabled={isSubmitting || selectedDevices.length === 0}
           >
-            {isSubmitting ? 'Đang tạo...' : 'Tạo phiếu'}
+            {isSubmitting ? 'Đang tạo...' : 'Tạo phiếu mượn'}
           </button>
         </div>
       </form>
