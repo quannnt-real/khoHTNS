@@ -183,8 +183,16 @@ export default function Users() {
   };
 
   const getTotalDevices = (user) => {
-    const directBorrowCount = user._count?.borrowedDevices || 0;
-    const eventCount = user._count?.createdEvents || 0;
+    // Nếu dùng cấu trúc mới
+    if (user.borrowedDevicesCount) {
+      return user.borrowedDevicesCount.total;
+    }
+    
+    // Fallback cho cấu trúc cũ
+    const directBorrowCount = user.borrowedDevices?.length || 0;
+    const eventCount = user.createdEvents?.reduce((total, event) => 
+      total + (event._count?.eventDevices || 0), 0) || 0;
+    
     return directBorrowCount + eventCount;
   };
   
