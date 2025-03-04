@@ -85,7 +85,12 @@ async function returnDevice(req, res) {
     const device = await prisma.device.findUnique({
       where: { id: deviceId },
       include: {
-        borrower: true
+        borrower: true,
+        borrowHistory: {
+          orderBy: { borrowDate: 'desc' },
+          take: 1,
+          include: { transferTo: true }
+        }
       }
     });
     
@@ -95,6 +100,21 @@ async function returnDevice(req, res) {
     
     if (device.status !== 'borrowed') {
       return res.status(400).json({ message: 'Thiết bị hiện không ở trạng thái đang mượn' });
+    }
+
+    // Xác minh quyền trả thiết bị
+    const canReturn = 
+    // Người dùng là người mượn
+    device.borrowerId === userId ||
+    // Hoặc người dùng là người được chuyển thiết bị
+    (device.borrowHistory.length > 0 && 
+    device.borrowHistory[0].transferTo && 
+    device.borrowHistory[0].transferTo.id === userId);
+
+    if (!canReturn) {
+    return res.status(403).json({
+      message: 'Bạn không có quyền trả thiết bị này. Chỉ người mượn hoặc người được chuyển thiết bị mới có quyền trả.'
+    });
     }
     
     // Kiểm tra người dùng hiện tại có phải là người đang mượn thiết bị không

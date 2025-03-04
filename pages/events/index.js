@@ -6,7 +6,12 @@ export default function Events() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
-  
+  const [stats, setStats] = useState({
+    total: 0,
+    ongoing: 0,
+    completed: 0
+  });
+
   useEffect(() => {
     fetchEvents();
   }, [filter]);
@@ -30,6 +35,18 @@ export default function Events() {
       const data = await response.json();
       // console.log('Fetched events:', data);
       setEvents(data);
+
+      // Update stats
+      const ongoingCount = data.filter(d => d.status === 'ongoing').length;
+      const completedCount = data.filter(d => d.status === 'completed').length;
+      
+      console.log('ongoingCount: ' + ongoingCount, 'completedCount: ' + completedCount);
+
+      setStats({
+        total: data.length,
+        ongoing: ongoingCount,
+        completed: completedCount
+      });
       
     } catch (err) {
       console.error('Error details:', err);
@@ -130,9 +147,12 @@ export default function Events() {
                 {events.map((event) => (
                   <tr key={event.id}>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900 font-bold">
-                        {event.title}
-                      </div>
+                      <Link 
+                        href={`/events/${event.id}`}
+                        className="text-blue-800 hover:text-blue-500 text-sm font-bold"
+                      >
+                          {event.title}
+                      </Link>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">

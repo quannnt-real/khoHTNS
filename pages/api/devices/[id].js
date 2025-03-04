@@ -2,10 +2,12 @@ import { prisma } from '../../../lib/prisma';
 
 export default async function handler(req, res) {
   const { id } = req.query;
-
+  console.log(req.method);
   switch (req.method) {
     case 'GET':
       return getDevice(req, res, id);
+    case 'POST':
+      return createDevice(req, res);
     case 'PUT':
       return updateDevice(req, res, id);
     case 'DELETE':
@@ -17,10 +19,25 @@ export default async function handler(req, res) {
 
 async function getDevice(req, res, id) {
   try {
-    // Get device with complete history
+    // Lấy thiết bị với lịch sử đã được tối ưu
     const device = await prisma.device.findUnique({
       where: { id },
-      include: {
+      select: {
+        // Thông tin cơ bản của thiết bị
+        id: true,
+        name: true,
+        image: true,
+        locationImage: true,
+        status: true,
+        purchaseDate: true,
+        warrantyEnd: true,
+        warrantyPlace: true,
+        notes: true,
+        borrowContext: true,
+        borrowerId: true,
+        eventId: true,
+        
+        // Thông tin người mượn hiện tại (nếu có)
         borrower: {
           select: {
             id: true,
@@ -28,10 +45,35 @@ async function getDevice(req, res, id) {
             phone: true
           }
         },
-        event: true,
+        
+        // Sự kiện hiện tại (nếu có)
+        event: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            // Thêm thông tin người tạo sự kiện
+            creator: {
+              select: {
+                id: true,
+                name: true,
+                phone: true
+              }
+            }
+          }
+        },
+        
+        // Lịch sử mượn trả - chỉ lấy 10 bản ghi gần nhất
         borrowHistory: {
           orderBy: { borrowDate: 'desc' },
-          include: {
+          take: 10,
+          select: {
+            id: true,
+            borrowDate: true,
+            returnDate: true,
+            borrowContext: true,
+            
+            // Người mượn
             user: {
               select: {
                 id: true,
@@ -39,6 +81,8 @@ async function getDevice(req, res, id) {
                 phone: true
               }
             },
+            
+            // Người được chuyển (nếu có)
             transferTo: {
               select: {
                 id: true,
@@ -46,12 +90,15 @@ async function getDevice(req, res, id) {
                 phone: true
               }
             },
-            event: true
-          }
-        },
-        eventDevices: {
-          include: {
-            event: true
+            
+            // Thông tin sự kiện nếu là mượn qua sự kiện
+            eventId: true,
+            event: {
+              select: {
+                id: true,
+                title: true
+              }
+            }
           }
         }
       }
@@ -61,25 +108,98 @@ async function getDevice(req, res, id) {
       return res.status(404).json({ message: 'Không tìm thấy thiết bị' });
     }
 
-    // Format response to include both personal and event history
+    // Định dạng lại lịch sử để dễ sử dụng
     const formattedHistory = device.borrowHistory.map(bh => ({
-      ...bh,
+      id: bh.id,
+      borrowDate: bh.borrowDate,
+      returnDate: bh.returnDate,
       type: bh.borrowContext,
-      eventInfo: bh.event || null
+      user: bh.user,
+      transferTo: bh.transferTo,
+      event: bh.event ? {
+        id: bh.event.id,
+        title: bh.event.title
+      } : null
     }));
 
-    // Add device and history info to response
+    // Thêm thông tin thiết bị và kiểm tra quyền trả
     const response = {
       ...device,
       formattedHistory,
-      // Don't allow return if device was borrowed through event
-      canReturn: device.status === 'borrowed' && device.borrowContext === 'personal'
+      
+      // Kiểm tra quyền trả thiết bị
+      canReturn: (user) => {
+        // Người dùng phải được xác thực
+        if (!user) return false;
+        
+        // Thiết bị phải đang được mượn
+        if (device.status !== 'borrowed') return false;
+        
+        // Nếu mượn qua sự kiện, chỉ cho phép trả qua quy trình sự kiện
+        if (device.borrowContext === 'event') return false;
+        
+        // Người dùng là người mượn
+        if (device.borrowerId === user.id) return true;
+        
+        // Hoặc là người được chuyển thiết bị gần nhất
+        if (device.borrowHistory.length > 0 && device.borrowContext === 'personal') {
+          const lastHistory = device.borrowHistory[0];
+          if (lastHistory.transferTo && lastHistory.transferTo.id === user.id) {
+            return true;
+          }
+        }
+        
+        return false;
+      }
     };
 
     return res.status(200).json(response);
 
   } catch (error) {
     console.error('Error fetching device:', error);
+    return res.status(500).json({ message: 'Lỗi server: ' + error.message });
+  }
+}
+
+// Tạo thiết bị mới
+async function createDevice(req, res) {
+  try {
+    const { 
+      name, 
+      image, 
+      locationImage, 
+      purchaseDate, 
+      warrantyEnd, 
+      warrantyPlace, 
+      notes 
+    } = req.body;
+
+    // Xác thực dữ liệu đầu vào
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ message: 'Tên thiết bị là bắt buộc' });
+    }
+
+    // Tạo thiết bị mới trong cơ sở dữ liệu
+    const newDevice = await prisma.device.create({
+      data: {
+        name,
+        image: image || null,
+        locationImage: locationImage || null,
+        purchaseDate: purchaseDate || null,
+        warrantyEnd: warrantyEnd || null,
+        warrantyPlace: warrantyPlace || null,
+        notes: notes || null,
+        status: 'available', // Thiết bị mới luôn có trạng thái available
+      }
+    });
+
+    return res.status(201).json({ 
+      message: 'Tạo thiết bị thành công',
+      device: newDevice 
+    });
+
+  } catch (error) {
+    console.error('Error creating device:', error);
     return res.status(500).json({ message: 'Lỗi server: ' + error.message });
   }
 }

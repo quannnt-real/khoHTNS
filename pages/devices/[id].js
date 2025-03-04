@@ -21,6 +21,15 @@ export default function DeviceDetail() {
   const [returnLocationImage, setReturnLocationImage] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
+  // Thêm state mới
+  const [currentUser, setCurrentUser] = useState(null);
+  const [canReturn, setCanReturn] = useState(false);
+  // Thêm state cho modal xóa
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+// Thêm state isAdmin
+  const [isAdmin, setIsAdmin] = useState(false);
   
   useEffect(() => {
     // Add logging
@@ -30,10 +39,39 @@ export default function DeviceDetail() {
       // console.log("Starting to fetch device and users data");
       fetchDevice();
       fetchUsers();
+      // Lấy thông tin người dùng hiện tại từ localStorage
+      try {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          setCurrentUser(user);
+// Kiểm tra xem người dùng có phải là admin không
+          setIsAdmin(user.role === 'admin');
+        }
+      } catch (err) {
+        console.error('Error parsing user from localStorage:', err);
+      }
     } else {
       // console.log("No device ID available yet");
     }
   }, [id]);
+
+  // Thêm useEffect mới để kiểm tra quyền trả
+  useEffect(() => {
+    if (device && currentUser) {
+      // Kiểm tra quyền trả
+      const userCanReturn = 
+        // User là người mượn
+        (device.borrower && device.borrower.id === currentUser.id) || 
+        // Hoặc là người được chuyển thiết bị
+        (device.borrowHistory && 
+        device.borrowHistory.length > 0 && 
+        device.borrowHistory[0].transferTo && 
+        device.borrowHistory[0].transferTo.id === currentUser.id);
+      
+      setCanReturn(userCanReturn);
+    }
+  }, [device, currentUser]);
   
   const fetchDevice = async () => {
     try {
@@ -71,10 +109,14 @@ export default function DeviceDetail() {
     }
   };
   
-  const handleDeleteDevice = async () => {
-    if (!confirm('Are you sure you want to delete this equipment?')) {
-      return;
-    }
+  const handleDeleteDevice = () => {
+    setShowDeleteModal(true);
+  };
+
+  // Thêm hàm mới để xử lý việc xác nhận xóa
+  const confirmDeleteDevice = async () => {
+    setIsDeleting(true);
+    setDeleteError('');
     
     try {
       const response = await fetch(`/api/devices/${id}`, {
@@ -82,13 +124,15 @@ export default function DeviceDetail() {
       });
       
       if (!response.ok) {
-        throw new Error('Failed to delete device');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Không thể xóa thiết bị');
       }
       
       router.push('/');
     } catch (err) {
       console.error('Error deleting device:', err);
-      setError('Failed to delete device. Please try again.');
+      setDeleteError(err.message || 'Không thể xóa thiết bị. Vui lòng thử lại.');
+      setIsDeleting(false);
     }
   };
   
@@ -276,9 +320,12 @@ export default function DeviceDetail() {
           <Link href={`/devices/edit/${id}`} className="btn-secondary">
             Edit
           </Link>
-          <button onClick={handleDeleteDevice} className="btn-danger">
-            Delete
-          </button>
+          {/* Chỉ hiển thị nút Delete khi người dùng là admin */}
+          {isAdmin && (
+            <button onClick={handleDeleteDevice} className="btn-danger">
+              Delete
+            </button>
+          )}
           <Link href="/" className="btn inline-block">
             Quay lại
           </Link>
@@ -329,19 +376,26 @@ export default function DeviceDetail() {
                 </div>
               </div>
               
-              <div className="flex space-x-2">
+              <div className="flex space-x-2 items-center">
                 {device.status === 'available' ? (
                   <button onClick={handleBorrow} className="btn">
                     Mượn
                   </button>
                 ) : (
                   <>
-                    <button onClick={() => setShowReturnModal(true)} className="btn">
-                      Trả
-                    </button>
-                    <button onClick={() => setShowTransferModal(true)} className="btn-secondary">
-                      Chuyển
-                    </button>
+                    {/* Chỉ hiển thị nút Trả khi có quyền */}
+                    {canReturn && (
+                      <button onClick={() => setShowReturnModal(true)} className="btn">
+                        Trả
+                      </button>
+                    )}
+                    
+                    {/* Chỉ hiển thị nút Chuyển khi người dùng là người mượn */}
+                    {currentUser && device.borrower && device.borrower.id === currentUser.id && (
+                      <button onClick={() => setShowTransferModal(true)} className="btn-secondary">
+                        Chuyển
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -404,6 +458,33 @@ export default function DeviceDetail() {
               </div>
             )}
             
+            {device.event && (
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-md">
+                <div className="flex items-center mb-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                  </svg>
+                  <h3 className="text-md font-semibold text-gray-900">Thông tin Sự kiện đang sử dụng thiết bị</h3>
+                </div>
+                
+                <div className="pl-7 grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                  <div className='space-y-1'>
+                    <p className="text-sm text-gray-600 font-medium">Người mượn:</p>
+                    <p className="text-sm font-bold text-gray-800">{device.event.creator.name} ({device.event.creator.phone})</p>
+                  </div>
+                  
+                  <div className='space-y-1'>
+                    <p className="text-sm text-gray-600 font-medium">Sự kiện đang dùng:</p>
+                    <p className="text-sm font-bold text-gray-800 uppercase">{device.event.title}</p>
+                  </div>
+                </div>
+                <div className="pl-7 grid grid-cols-1 mt-4 py-2 bg-red-100 rounded">
+                    <p className="text-sm text-gray-600 font-bold ">Lưu ý:</p>
+                  <p className="text-sm text-gray-800">Thiết bị sử dụng trong sự kiện không thể trả ở đây, phải trả ở trang sự kiện</p>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
               {device.purchaseDate && (
                 <div>
@@ -519,24 +600,31 @@ export default function DeviceDetail() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {history.transferTo ? (
-                          <div className="flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-purple-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                              <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8z" />
-                              <path d="M12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z" />
-                            </svg>
-                            <span>Chuyển cho {history.transferTo.name}</span>
-                          </div>
-                        ) : history.returnDate ? (
-                          <div className="flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                            <span>Trả đúng hạn</span>
-                          </div>
-                        ) : (
-                          '—'
-                        )}
+                      {history.event ? (
+                        <div className="flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                          </svg>
+                          <span>Mượn cho sự kiện: <span className="font-medium">{history.event.title}</span></span>
+                        </div>
+                      ) : history.transferTo ? (
+                        <div className="flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-purple-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8z" />
+                            <path d="M12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z" />
+                          </svg>
+                          <span>Chuyển cho {history.transferTo.name}</span>
+                        </div>
+                      ) : history.returnDate ? (
+                        <div className="flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          <span>Trả đúng hạn</span>
+                        </div>
+                      ) : (
+                        '—'
+                      )}
                       </td>
                     </tr>
                   ))}
@@ -745,7 +833,7 @@ export default function DeviceDetail() {
               <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-md text-sm">
                 <div className="flex">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-  0 1 1 0 01  0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
                   <span>{actionError}</span>
                 </div>
@@ -876,6 +964,88 @@ export default function DeviceDetail() {
                       <path d="M12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z" />
                     </svg>
                     Xác nhận chuyển thiết bị
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal Xác Nhận Xóa Thiết Bị */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <h3 className="text-lg font-medium">Xác nhận xóa</h3>
+              </div>
+              <button 
+                onClick={() => setShowDeleteModal(false)}
+                className="text-gray-400 hover:text-gray-500"
+                disabled={isDeleting}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {deleteError && (
+              <div className="mb-4 p-3 bg-red-50 text-red-700 rounded">
+                <p>{deleteError}</p>
+              </div>
+            )}
+            
+            <div className="mb-4">
+              <p className="text-gray-700">
+                Bạn có chắc chắn muốn xóa thiết bị <span className="font-bold">{device.name}</span>?
+              </p>
+              
+              <p className="mt-2 text-gray-600">
+                Hành động này không thể hoàn tác.
+              </p>
+              
+              {device.status === 'borrowed' && (
+                <p className="mt-2 text-yellow-600 bg-yellow-50 p-3 rounded text-sm">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 inline mr-1" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-181v3a1 1 0 082 3V6a1 1 0 0031-1z" clipRule="evenodd" />
+                  </svg>
+                  Thiết bị đang được mượn bởi {device.borrower?.name}. Việc xóa sẽ xóa cả lịch sử mượn trả.
+                </p>
+              )}
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="btn-outline"
+                disabled={isDeleting}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={confirmDeleteDevice}
+                className="btn-danger flex items-center"
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Đang xóa...
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    Xác nhận xóa
                   </>
                 )}
               </button>
