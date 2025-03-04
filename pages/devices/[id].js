@@ -28,8 +28,14 @@ export default function DeviceDetail() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
-// Thêm state isAdmin
+  // Thêm state isAdmin
   const [isAdmin, setIsAdmin] = useState(false);
+  // Thêm state cho yêu cầu mượn và chuyển thiết bị
+  const [requestLoading, setRequestLoading] = useState(false);
+  const [requestError, setRequestError] = useState('');
+  const [requestSuccess, setRequestSuccess] = useState(false);
+  // Thêm state cho yêu cầu đang chờ xử lý
+  const [pendingRequests, setPendingRequests] = useState([]);
   
   useEffect(() => {
     // Add logging
@@ -45,7 +51,7 @@ export default function DeviceDetail() {
         if (userStr) {
           const user = JSON.parse(userStr);
           setCurrentUser(user);
-// Kiểm tra xem người dùng có phải là admin không
+          // Kiểm tra xem người dùng có phải là admin không
           setIsAdmin(user.role === 'admin');
         }
       } catch (err) {
@@ -55,6 +61,13 @@ export default function DeviceDetail() {
       // console.log("No device ID available yet");
     }
   }, [id]);
+  
+  // Thêm useEffect để lấy yêu cầu đang chờ xử lý khi có currentUser
+  useEffect(() => {
+    if (currentUser && id) {
+      fetchPendingRequests();
+    }
+  }, [currentUser, id]);
 
   // Thêm useEffect mới để kiểm tra quyền trả
   useEffect(() => {
@@ -106,6 +119,33 @@ export default function DeviceDetail() {
       setUsers(data);
     } catch (err) {
       console.error('Error fetching users:', err);
+    }
+  };
+  
+  // Thêm hàm để lấy các yêu cầu đang chờ xử lý
+  const fetchPendingRequests = async () => {
+    try {
+      // Chỉ lấy yêu cầu nếu user đã đăng nhập
+      if (!currentUser) return;
+      
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      const response = await fetch(`/api/transfers/pending?deviceId=${id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to fetch pending requests');
+        return;
+      }
+      
+      const data = await response.json();
+      setPendingRequests(data.requests);
+    } catch (err) {
+      console.error('Error fetching pending requests:', err);
     }
   };
   
@@ -222,7 +262,7 @@ export default function DeviceDetail() {
   
   const handleTransfer = async () => {
     if (!transferUserId) {
-      setActionError('Please select a user');
+      setActionError('Vui lòng chọn người nhận');
       return;
     }
     
@@ -230,30 +270,91 @@ export default function DeviceDetail() {
     setActionError('');
     
     try {
-      const response = await fetch('/api/borrow/transfer', {
+      // Kiểm tra xem người nhận có email không
+      const recipient = users.find(user => user.id === transferUserId);
+      if (!recipient || !recipient.email) {
+        throw new Error('Người nhận cần có email để nhận thông báo xác nhận.');
+      }
+      
+      // Tạo yêu cầu chuyển thiết bị qua API mới
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Bạn cần đăng nhập lại để thực hiện thao tác này.');
+      }
+      
+      const response = await fetch('/api/transfers/request', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           deviceId: id,
-          fromUserId: device.borrowerId,
-          toUserId: transferUserId
+          toUserId: transferUserId,
+          requestType: 'transfer'
         }),
       });
       
+      const data = await response.json();
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to transfer device');
+        throw new Error(data.message || 'Không thể tạo yêu cầu chuyển thiết bị');
       }
       
       setShowTransferModal(false);
-      fetchDevice(); // Refresh device data
+      alert(`Đã gửi yêu cầu chuyển thiết bị đến ${recipient.name}. Người nhận sẽ nhận được email xác nhận.`);
     } catch (err) {
       console.error('Error transferring device:', err);
-      setActionError(err.message || 'Failed to transfer device. Please try again.');
+      setActionError(err.message || 'Lỗi khi chuyển thiết bị. Vui lòng thử lại.');
     } finally {
       setActionLoading(false);
+    }
+  };
+  
+  // Thêm hàm xử lý yêu cầu mượn thiết bị
+  const handleBorrowRequest = async () => {
+    setRequestLoading(true);
+    setRequestError('');
+    setRequestSuccess(false);
+    
+    try {
+      // Kiểm tra xem người mượn hiện tại có email không
+      if (!device.borrower || !device.borrower.email) {
+        throw new Error('Người đang mượn thiết bị không có email để nhận thông báo xác nhận.');
+      }
+      
+      // Tạo yêu cầu mượn thiết bị
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Bạn cần đăng nhập lại để thực hiện thao tác này.');
+      }
+      
+      const response = await fetch('/api/transfers/request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          deviceId: id,
+          requestType: 'borrow'
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Không thể tạo yêu cầu mượn thiết bị');
+      }
+      
+      setRequestSuccess(true);
+      alert(`Đã gửi yêu cầu mượn thiết bị đến ${device.borrower.name}. Bạn sẽ nhận được thông báo khi người dùng phản hồi.`);
+    } catch (err) {
+      console.error('Error requesting device:', err);
+      setRequestError(err.message || 'Lỗi khi yêu cầu mượn thiết bị. Vui lòng thử lại.');
+      alert(err.message || 'Lỗi khi yêu cầu mượn thiết bị. Vui lòng thử lại.');
+    } finally {
+      setRequestLoading(false);
     }
   };
   
@@ -279,6 +380,42 @@ export default function DeviceDetail() {
     } catch (err) {
       console.error('Error uploading image:', err);
       setActionError('Failed to upload image. Please try again.');
+    }
+  };
+  
+  // Thêm hàm xử lý xác nhận yêu cầu
+  const handleConfirmRequest = async (requestId, action) => {
+    try {
+      setActionLoading(true);
+      
+      const response = await fetch('/api/transfers/confirm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: requestId,
+          action
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Có lỗi xảy ra khi xử lý yêu cầu');
+      }
+      
+      // Cập nhật lại dữ liệu thiết bị và yêu cầu đang chờ
+      fetchDevice();
+      fetchPendingRequests();
+      
+      // Hiển thị thông báo
+      alert(action === 'accept' ? 'Đã xác nhận yêu cầu thành công!' : 'Đã từ chối yêu cầu!');
+    } catch (err) {
+      console.error('Error confirming request:', err);
+      alert(err.message || 'Có lỗi xảy ra khi xử lý yêu cầu. Vui lòng thử lại.');
+    } finally {
+      setActionLoading(false);
     }
   };
   
@@ -396,6 +533,13 @@ export default function DeviceDetail() {
                         Chuyển
                       </button>
                     )}
+                    
+                    {/* Nút Yêu cầu mượn cho người không phải người mượn hiện tại */}
+                    {currentUser && device.borrower && device.borrower.id !== currentUser.id && (
+                      <button onClick={() => handleBorrowRequest()} className="btn-outline">
+                        Yêu cầu mượn
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -455,6 +599,87 @@ export default function DeviceDetail() {
                     </div>
                   )}
                 </div>
+                
+                {/* Hiển thị yêu cầu đang chờ xử lý */}
+                {pendingRequests && pendingRequests.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-blue-200">
+                    <div className="flex items-center mb-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                      </svg>
+                      <h3 className="text-md font-semibold text-gray-900">Yêu cầu đang chờ xử lý</h3>
+                      <span className="ml-2 px-2 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-full">{pendingRequests.length}</span>
+                    </div>
+                    
+                    <div className="pl-7 space-y-3">
+                      {pendingRequests.map(request => {
+                        // Xác định loại yêu cầu (chuyển/mượn) và thông tin liên quan
+                        const isTransfer = !!request.transferTo;
+                        let requestType, requesterName, recipientName;
+                        
+                        if (isTransfer) {
+                          requestType = "Chuyển thiết bị";
+                          requesterName = request.user.name;
+                          recipientName = request.transferTo.name;
+                        } else {
+                          requestType = "Yêu cầu mượn";
+                          requesterName = request.user.name;
+                          recipientName = request.transferFrom ? request.transferFrom.name : 'N/A';
+                        }
+                        
+                        return (
+                          <div key={request.id} className="bg-white p-3 rounded-md border border-blue-100 shadow-sm">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <span className="inline-block px-2 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-md mb-1">{requestType}</span>
+                                <p className="text-sm font-medium">
+                                  {isTransfer ? 
+                                    `${requesterName} muốn chuyển thiết bị cho ${recipientName}` : 
+                                    `${requesterName} muốn mượn thiết bị từ ${recipientName}`}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  Yêu cầu: {new Date(request.createdAt).toLocaleDateString('vi-VN', {
+                                    year: 'numeric',
+                                    month: 'numeric',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </p>
+                              </div>
+                              
+                              {/* Các nút hành động nếu người dùng hiện tại là người cần xác nhận */}
+                              {((isTransfer && currentUser.id === request.transferTo.id) || 
+                                (!isTransfer && currentUser.id === request.transferFrom.id)) && (
+                                <div className="flex space-x-2">
+                                  <button 
+                                    onClick={() => handleConfirmRequest(request.id, 'accept')}
+                                    className="px-3 py-1 bg-green-500 text-white text-xs font-medium rounded hover:bg-green-600"
+                                  >
+                                    Xác nhận
+                                  </button>
+                                  <button 
+                                    onClick={() => handleConfirmRequest(request.id, 'reject')}
+                                    className="px-3 py-1 bg-red-500 text-white text-xs font-medium rounded hover:bg-red-600"
+                                  >
+                                    Từ chối
+                                  </button>
+                                </div>
+                              )}
+                              
+                              {/* Trạng thái "Đang chờ" cho người tạo yêu cầu */}
+                              {currentUser.id === request.userId && (
+                                <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded-full">
+                                  Đang chờ xác nhận
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             
@@ -816,7 +1041,7 @@ export default function DeviceDetail() {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                 </svg>
-                <h3 className="text-lg font-medium">Chuyển thiết bị cho người khác</h3>
+                <h3 className="text-lg font-medium">Yêu cầu chuyển thiết bị cho người khác</h3>
               </div>
               <button 
                 onClick={() => setShowTransferModal(false)} 
@@ -873,7 +1098,7 @@ export default function DeviceDetail() {
                 )}
                 
                 <div>
-                  <p className="text-sm text-gray-600 font-medium">Thời gian chuyển:</p>
+                  <p className="text-sm text-gray-600 font-medium">Thời gian yêu cầu:</p>
                   <p className="text-sm text-gray-800">
                     {new Date().toLocaleDateString('vi-VN', {
                       year: 'numeric',
@@ -908,7 +1133,7 @@ export default function DeviceDetail() {
                   {users
                     .filter(user => user.id !== device.borrowerId)
                     .map(user => (
-                      <option key={user.id} value={user.id}>{user.name} ({user.phone})</option>
+                      <option key={user.id} value={user.id}>{user.name} ({user.phone || 'Không có SĐT'}){!user.email && ' (Không có email)'}</option>
                     ))
                   }
                 </select>
@@ -920,19 +1145,24 @@ export default function DeviceDetail() {
               </div>
               
               <p className="mt-2 text-xs text-gray-500">
-                Sau khi chuyển, người nhận sẽ chịu trách nhiệm với thiết bị này
+                Người nhận cần có địa chỉ email để nhận thông báo xác nhận
               </p>
             </div>
             
-            <div className="mt-2 p-3 bg-yellow-50 rounded-md text-sm text-yellow-700">
+            <div className="mt-4 p-3 bg-yellow-50 rounded-md text-sm text-yellow-700">
               <div className="flex">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
-                <span>
-                  Thao tác này sẽ chuyển trách nhiệm thiết bị từ <strong>{device.borrower?.name}</strong> sang người được chọn.
-                  Lịch sử mượn trả sẽ được ghi nhận.
-                </span>
+                <div>
+                  <p className="font-medium mb-1">Quy trình xác nhận 2 chiều</p>
+                  <p>
+                    1. Bạn gửi yêu cầu chuyển thiết bị đến người được chọn<br />
+                    2. Người nhận sẽ nhận được email xác nhận<br />
+                    3. Khi người nhận xác nhận, thiết bị sẽ được chuyển sang người đó<br />
+                    4. Cả hai bên sẽ nhận được thông báo kết quả
+                  </p>
+                </div>
               </div>
             </div>
             
@@ -963,7 +1193,7 @@ export default function DeviceDetail() {
                       <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8z" />
                       <path d="M12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z" />
                     </svg>
-                    Xác nhận chuyển thiết bị
+                    Gửi yêu cầu chuyển thiết bị
                   </>
                 )}
               </button>
