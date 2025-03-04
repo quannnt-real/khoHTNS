@@ -181,6 +181,12 @@ export default function Users() {
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
   };
+
+  const getTotalDevices = (user) => {
+    const directBorrowCount = user._count?.borrowedDevices || 0;
+    const eventCount = user._count?.createdEvents || 0;
+    return directBorrowCount + eventCount;
+  };
   
   return (
     <div>
@@ -303,7 +309,7 @@ export default function Users() {
                     <td className="table-cell">
                       <Link href={`/users/${user.id}`} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 hover:bg-gray-200">
                         <FontAwesomeIcon icon="boxes" className="mr-1 h-3 w-3" /> 
-                        {user.borrowedDevices?.length || 0} thiết bị
+                        {getTotalDevices(user)} thiết bị
                       </Link>
                     </td>
                     <td className="table-cell text-right">

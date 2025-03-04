@@ -11,20 +11,10 @@ export default async function handler(req, res) {
         id: true,
         name: true,
         phone: true,
-        email: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true,
-        borrowedDevices: {
-          select: {
-            id: true,
-            name: true,
-            image: true
-          }
-        },
         _count: {
           select: {
-            borrowedDevices: true
+            borrowedDevices: true,
+            createdEvents: true
           }
         }
       },

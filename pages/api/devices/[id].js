@@ -17,10 +17,25 @@ export default async function handler(req, res) {
 
 async function getDevice(req, res, id) {
   try {
-    // Get device with complete history
+    // Lấy thiết bị với lịch sử đã được tối ưu
     const device = await prisma.device.findUnique({
       where: { id },
-      include: {
+      select: {
+        // Thông tin cơ bản của thiết bị
+        id: true,
+        name: true,
+        image: true,
+        locationImage: true,
+        status: true,
+        purchaseDate: true,
+        warrantyEnd: true,
+        warrantyPlace: true,
+        notes: true,
+        borrowContext: true,
+        borrowerId: true,
+        eventId: true,
+        
+        // Thông tin người mượn hiện tại (nếu có)
         borrower: {
           select: {
             id: true,
@@ -28,10 +43,35 @@ async function getDevice(req, res, id) {
             phone: true
           }
         },
-        event: true,
+        
+        // Sự kiện hiện tại (nếu có)
+        event: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            // Thêm thông tin người tạo sự kiện
+            creator: {
+              select: {
+                id: true,
+                name: true,
+                phone: true
+              }
+            }
+          }
+        },
+        
+        // Lịch sử mượn trả - chỉ lấy 10 bản ghi gần nhất
         borrowHistory: {
           orderBy: { borrowDate: 'desc' },
-          include: {
+          take: 10,
+          select: {
+            id: true,
+            borrowDate: true,
+            returnDate: true,
+            borrowContext: true,
+            
+            // Người mượn
             user: {
               select: {
                 id: true,
@@ -39,6 +79,8 @@ async function getDevice(req, res, id) {
                 phone: true
               }
             },
+            
+            // Người được chuyển (nếu có)
             transferTo: {
               select: {
                 id: true,
@@ -46,12 +88,15 @@ async function getDevice(req, res, id) {
                 phone: true
               }
             },
-            event: true
-          }
-        },
-        eventDevices: {
-          include: {
-            event: true
+            
+            // Thông tin sự kiện nếu là mượn qua sự kiện
+            eventId: true,
+            event: {
+              select: {
+                id: true,
+                title: true
+              }
+            }
           }
         }
       }
@@ -61,35 +106,40 @@ async function getDevice(req, res, id) {
       return res.status(404).json({ message: 'Không tìm thấy thiết bị' });
     }
 
-    // Format response to include both personal and event history
+    // Định dạng lại lịch sử để dễ sử dụng
     const formattedHistory = device.borrowHistory.map(bh => ({
-      ...bh,
+      id: bh.id,
+      borrowDate: bh.borrowDate,
+      returnDate: bh.returnDate,
       type: bh.borrowContext,
-      eventInfo: bh.event || null
+      user: bh.user,
+      transferTo: bh.transferTo,
+      event: bh.event ? {
+        id: bh.event.id,
+        title: bh.event.title
+      } : null
     }));
 
-    // Add device and history info to response
+    // Thêm thông tin thiết bị và kiểm tra quyền trả
     const response = {
       ...device,
       formattedHistory,
-      // Don't allow return if device was borrowed through event
-      // canReturn: device.status === 'borrowed' && device.borrowContext === 'personal'
-
-      // Check if device can be returned by current user
+      
+      // Kiểm tra quyền trả thiết bị
       canReturn: (user) => {
-        // User must be authenticated
+        // Người dùng phải được xác thực
         if (!user) return false;
         
-        // Device must be borrowed
+        // Thiết bị phải đang được mượn
         if (device.status !== 'borrowed') return false;
         
-        // If borrowed through event, only allow return through event process
+        // Nếu mượn qua sự kiện, chỉ cho phép trả qua quy trình sự kiện
         if (device.borrowContext === 'event') return false;
         
-        // User must be either the borrower
+        // Người dùng là người mượn
         if (device.borrowerId === user.id) return true;
         
-        // Or the last person the device was transferred to
+        // Hoặc là người được chuyển thiết bị gần nhất
         if (device.borrowHistory.length > 0 && device.borrowContext === 'personal') {
           const lastHistory = device.borrowHistory[0];
           if (lastHistory.transferTo && lastHistory.transferTo.id === user.id) {

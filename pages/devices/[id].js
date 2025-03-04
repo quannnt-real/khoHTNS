@@ -21,6 +21,9 @@ export default function DeviceDetail() {
   const [returnLocationImage, setReturnLocationImage] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
+  // Thêm state mới
+  const [currentUser, setCurrentUser] = useState(null);
+  const [canReturn, setCanReturn] = useState(false);
   
   useEffect(() => {
     // Add logging
@@ -30,10 +33,37 @@ export default function DeviceDetail() {
       // console.log("Starting to fetch device and users data");
       fetchDevice();
       fetchUsers();
+      // Lấy thông tin người dùng hiện tại từ localStorage
+      try {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          setCurrentUser(user);
+        }
+      } catch (err) {
+        console.error('Error parsing user from localStorage:', err);
+      }
     } else {
       // console.log("No device ID available yet");
     }
   }, [id]);
+
+  // Thêm useEffect mới để kiểm tra quyền trả
+  useEffect(() => {
+    if (device && currentUser) {
+      // Kiểm tra quyền trả
+      const userCanReturn = 
+        // User là người mượn
+        (device.borrower && device.borrower.id === currentUser.id) || 
+        // Hoặc là người được chuyển thiết bị
+        (device.borrowHistory && 
+        device.borrowHistory.length > 0 && 
+        device.borrowHistory[0].transferTo && 
+        device.borrowHistory[0].transferTo.id === currentUser.id);
+      
+      setCanReturn(userCanReturn);
+    }
+  }, [device, currentUser]);
   
   const fetchDevice = async () => {
     try {
@@ -329,19 +359,26 @@ export default function DeviceDetail() {
                 </div>
               </div>
               
-              <div className="flex space-x-2">
+              <div className="flex space-x-2 items-center">
                 {device.status === 'available' ? (
                   <button onClick={handleBorrow} className="btn">
                     Mượn
                   </button>
                 ) : (
                   <>
-                    <button onClick={() => setShowReturnModal(true)} className="btn">
-                      Trả
-                    </button>
-                    <button onClick={() => setShowTransferModal(true)} className="btn-secondary">
-                      Chuyển
-                    </button>
+                    {/* Chỉ hiển thị nút Trả khi có quyền */}
+                    {canReturn && (
+                      <button onClick={() => setShowReturnModal(true)} className="btn">
+                        Trả
+                      </button>
+                    )}
+                    
+                    {/* Chỉ hiển thị nút Chuyển khi người dùng là người mượn */}
+                    {currentUser && device.borrower && device.borrower.id === currentUser.id && (
+                      <button onClick={() => setShowTransferModal(true)} className="btn-secondary">
+                        Chuyển
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -404,6 +441,33 @@ export default function DeviceDetail() {
               </div>
             )}
             
+            {device.event && (
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-md">
+                <div className="flex items-center mb-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                  </svg>
+                  <h3 className="text-md font-semibold text-gray-900">Thông tin Sự kiện đang sử dụng thiết bị</h3>
+                </div>
+                
+                <div className="pl-7 grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                  <div className='space-y-1'>
+                    <p className="text-sm text-gray-600 font-medium">Người mượn:</p>
+                    <p className="text-sm font-bold text-gray-800">{device.event.creator.name} ({device.event.creator.phone})</p>
+                  </div>
+                  
+                  <div className='space-y-1'>
+                    <p className="text-sm text-gray-600 font-medium">Sự kiện đang dùng:</p>
+                    <p className="text-sm font-bold text-gray-800 uppercase">{device.event.title}</p>
+                  </div>
+                </div>
+                <div className="pl-7 grid grid-cols-1 mt-4 py-2 bg-red-100 rounded">
+                    <p className="text-sm text-gray-600 font-bold ">Lưu ý:</p>
+                  <p className="text-sm text-gray-800">Thiết bị sử dụng trong sự kiện không thể trả ở đây, phải trả ở trang sự kiện</p>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
               {device.purchaseDate && (
                 <div>
@@ -519,24 +583,31 @@ export default function DeviceDetail() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {history.transferTo ? (
-                          <div className="flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-purple-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                              <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8z" />
-                              <path d="M12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z" />
-                            </svg>
-                            <span>Chuyển cho {history.transferTo.name}</span>
-                          </div>
-                        ) : history.returnDate ? (
-                          <div className="flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                            <span>Trả đúng hạn</span>
-                          </div>
-                        ) : (
-                          '—'
-                        )}
+                      {history.event ? (
+                        <div className="flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                          </svg>
+                          <span>Mượn cho sự kiện: <span className="font-medium">{history.event.title}</span></span>
+                        </div>
+                      ) : history.transferTo ? (
+                        <div className="flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-purple-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8z" />
+                            <path d="M12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z" />
+                          </svg>
+                          <span>Chuyển cho {history.transferTo.name}</span>
+                        </div>
+                      ) : history.returnDate ? (
+                        <div className="flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          <span>Trả đúng hạn</span>
+                        </div>
+                      ) : (
+                        '—'
+                      )}
                       </td>
                     </tr>
                   ))}
