@@ -14,7 +14,23 @@ export default async function handler(req, res) {
 // Lấy danh sách sự kiện
 async function getEvents(req, res) {
   try {
+    // Lấy tham số status từ query string
+    const { status } = req.query;
+    
+    // Log để kiểm tra giá trị status
+    console.log('Status filter:', status);
+    
+    // Tạo điều kiện lọc dựa trên status
+    const where = {};
+    if (status && status !== 'all') {
+      where.status = status;
+    }
+
     const events = await prisma.event.findMany({
+      where,
+      orderBy: {
+        createdDate: 'desc'
+      },
       include: {
         creator: {
           select: {

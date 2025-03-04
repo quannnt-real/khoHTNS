@@ -12,12 +12,26 @@ export default function EventReturn() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [currentUser, setCurrentUser] = useState(null);
   
   useEffect(() => {
     if (id) {
       fetchEvent();
+      fetchCurrentUser();
     }
   }, [id]);
+  
+  const fetchCurrentUser = () => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        setCurrentUser(user);
+      }
+    } catch (err) {
+      console.error('Error parsing user from localStorage:', err);
+    }
+  };
   
   useEffect(() => {
     if (event && event.eventDevices) {
@@ -72,12 +86,26 @@ export default function EventReturn() {
     setError('');
     
     try {
+      // Đảm bảo có user trước khi gửi yêu cầu
+      if (!currentUser) {
+        try {
+          const userStr = localStorage.getItem('user');
+          if (!userStr) throw new Error('Vui lòng đăng nhập để trả thiết bị');
+          setCurrentUser(JSON.parse(userStr));
+        } catch (err) {
+          throw new Error('Vui lòng đăng nhập để trả thiết bị');
+        }
+      }
+      
       const response = await fetch(`/api/events/${id}/return`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ deviceConditions }),
+        body: JSON.stringify({ 
+          deviceConditions,
+          updaterId: currentUser?.id
+        }),
       });
       
       if (!response.ok) {
@@ -103,6 +131,11 @@ export default function EventReturn() {
         <p className="text-gray-600 mt-1">
           Phiếu #{id.substring(0, 8)} - Do {event.creator.name} tạo
         </p>
+        {currentUser && (
+          <p className="text-gray-600 mt-1">
+            Người trả: {currentUser.name}
+          </p>
+        )}
       </div>
       
       {error && (

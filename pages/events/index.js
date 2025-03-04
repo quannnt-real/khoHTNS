@@ -6,7 +6,12 @@ export default function Events() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
-  
+  const [stats, setStats] = useState({
+    total: 0,
+    ongoing: 0,
+    completed: 0
+  });
+
   useEffect(() => {
     fetchEvents();
   }, [filter]);
@@ -30,6 +35,18 @@ export default function Events() {
       const data = await response.json();
       // console.log('Fetched events:', data);
       setEvents(data);
+
+      // Update stats
+      const ongoingCount = data.filter(d => d.status === 'ongoing').length;
+      const completedCount = data.filter(d => d.status === 'completed').length;
+      
+      console.log('ongoingCount: ' + ongoingCount, 'completedCount: ' + completedCount);
+
+      setStats({
+        total: data.length,
+        ongoing: ongoingCount,
+        completed: completedCount
+      });
       
     } catch (err) {
       console.error('Error details:', err);
