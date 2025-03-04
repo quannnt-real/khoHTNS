@@ -44,7 +44,7 @@ export default function Events() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Phiếu Mượn Sự Kiện</h1>
         <Link href="/events/new" className="btn">
-          Tạo Sự Kiện Mới
+          Tạo Phiếu mượn mới cho sự kiện
         </Link>
       </div>
       
@@ -107,6 +107,9 @@ export default function Events() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Tên Sự Kiện
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Ngày Tạo
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -126,6 +129,11 @@ export default function Events() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {events.map((event) => (
                   <tr key={event.id}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900 font-bold">
+                        {event.title}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
                         {new Date(event.createdDate).toLocaleDateString()}
@@ -153,7 +161,7 @@ export default function Events() {
                           ? 'bg-green-100 text-green-800' 
                           : 'bg-yellow-100 text-yellow-800'
                       }`}>
-                        {event.status === 'completed' ? 'Đã Hoàn Thành' : 'Đang Diễn Ra'}
+                        {event.status === 'completed' ? 'Đã Hoàn Trả' : 'Đang Diễn Ra'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

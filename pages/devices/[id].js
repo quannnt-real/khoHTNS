@@ -686,7 +686,7 @@ export default function DeviceDetail() {
             
             <div className="flex justify-end space-x-3 mt-6">
               <button 
-                onClick={() => setShowReturnModal(false)} 
+                onClick={() => setShowReturnModal(true)} 
                 className="btn-outline"
                 disabled={actionLoading}
               >
@@ -694,8 +694,8 @@ export default function DeviceDetail() {
               </button>
               <button 
                 onClick={handleReturn} 
-                className={`btn flex items-center ${!returnLocationImage ? 'opacity-50 cursor-not-allowed' : ''}`}
-                disabled={actionLoading || !returnLocationImage}
+                className={`btn flex items-center ${actionLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={actionLoading}
               >
                 {actionLoading ? (
                   <>
