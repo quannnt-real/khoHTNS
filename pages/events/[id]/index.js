@@ -9,8 +9,8 @@ export default function EventDetail() {
   const [event, setEvent] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  
-  // Bỏ biến currentUser và isCreator không cần thiết
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   
   // State cho modal xác nhận xóa
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -20,6 +20,20 @@ export default function EventDetail() {
   useEffect(() => {
     if (id) {
       fetchEvent();
+    }
+
+    // Lấy thông tin người dùng từ localStorage
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        setCurrentUser(user);
+        
+        // Kiểm tra nếu người dùng có role admin
+        setIsAdmin(user.role === 'admin');
+      }
+    } catch (err) {
+      console.error('Error parsing user from localStorage:', err);
     }
   }, [id]);
 
@@ -126,13 +140,15 @@ export default function EventDetail() {
             </Link>
           )}
           
-          {/* Nút xóa sự kiện - hiển thị cho tất cả sự kiện */}
-          <button
-            onClick={() => setShowDeleteModal(true)}
-            className="btn-danger"
-          >
-            Xóa
-          </button>
+          {/* Nút xóa sự kiện - chỉ hiển thị nếu người dùng có quyền admin */}
+          {isAdmin && (
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="btn-danger"
+            >
+              Xóa
+            </button>
+          )}
         </div>
       </div>
 
@@ -160,15 +176,20 @@ export default function EventDetail() {
             </div>
             
             {/* Thêm phần hiển thị người sửa nếu có */}
-            {event.updater && event.status !== 'completed' ? (
+            {event.updater !== null && event.status !== 'completed' ? (
               <div>
                 <p className="text-sm text-gray-500">Người cập nhật gần nhất</p>
-                <p>{event.updater.name} ({event.updater.phone})</p>
+                <p>{event.updater.name || ''} ({event.updater.phone})</p>
               </div>
-            ) : (
+            ) : event.updater !== null ? (
               <div>
                 <p className="text-sm text-gray-500">Người trả thiết bị</p>
-                <p>{event.updater.name} ({event.updater.phone || 'N/A'})</p>
+                <p>{event.updater.name || ''} ({event.updater.phone || 'N/A'})</p>
+              </div>
+            ) : ( 
+              <div>
+                <p className="text-sm text-gray-500">Người trả thiết bị</p>
+                <p>N/A</p>
               </div>
             )}
             
@@ -279,6 +300,10 @@ export default function EventDetail() {
             <div className="mb-4">
               <p className="text-gray-700">
                 Bạn có chắc chắn muốn xóa sự kiện <span className="font-bold">{event.title}</span>?
+              </p>
+              
+              <p className="mt-2 text-gray-600">
+                Hành động này không thể hoàn tác. Chỉ người quản trị mới có quyền xóa sự kiện.
               </p>
               
               {event.status === 'ongoing' && (

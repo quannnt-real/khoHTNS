@@ -147,9 +147,12 @@ export default function Events() {
                 {events.map((event) => (
                   <tr key={event.id}>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900 font-bold">
-                        {event.title}
-                      </div>
+                      <Link 
+                        href={`/events/${event.id}`}
+                        className="text-blue-800 hover:text-blue-500 text-sm font-bold"
+                      >
+                          {event.title}
+                      </Link>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">

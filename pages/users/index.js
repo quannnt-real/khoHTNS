@@ -20,6 +20,11 @@ export default function Users() {
   const [formError, setFormError] = useState('');
   const [systemMessage, setSystemMessage] = useState('');
   
+  // Thêm các state mới sau phần khai báo state hiện có
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   useEffect(() => {
     fetchUsers();
   }, []);
@@ -129,14 +134,21 @@ export default function Users() {
     }
   };
   
-  const handleDeleteUser = async (userId, userName) => {
-    if (!confirm(`Bạn có chắc chắn muốn xóa người dùng "${userName}" không?`)) {
-      return;
-    }
+  // Thay thế hàm handleDeleteUser hiện tại bằng hàm này
+  const handleDeleteUser = (userId, userName) => {
+    setUserToDelete({ id: userId, name: userName });
+    setShowDeleteModal(true);
+  };
+
+  // Thêm hàm mới để xử lý việc xác nhận xóa
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
     
     try {
-      setIsLoading(true);
-      const response = await fetch(`/api/users/${userId}`, {
+      setIsDeleting(true);
+      setError('');
+      
+      const response = await fetch(`/api/users/${userToDelete.id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'
@@ -149,23 +161,22 @@ export default function Users() {
         console.error('Delete error response:', data);
         throw new Error(data.message || 'Không thể xóa người dùng');
       }
-       // Làm mới danh sách người dùng
-       await fetchUsers();
-
-       // Hiển thị thông báo hệ thống
-       setSystemMessage('Xóa người dùng thành công');
-       // Tự động ẩn thông báo sau 3 giây (tùy chọn)
-       setTimeout(() => setSystemMessage(''), 3000);
-
+      
+      // Làm mới danh sách người dùng
+      await fetchUsers();
+  
+      // Hiển thị thông báo hệ thống
+      setSystemMessage('Xóa người dùng thành công');
+      // Tự động ẩn thông báo sau 3 giây
+      setTimeout(() => setSystemMessage(''), 3000);
+  
     } catch (err) {
-      console.error('Error deleting user:', {
-        error: err,
-        message: err.message,
-        stack: err.stack
-      });
+      console.error('Error deleting user:', err);
       setError(err.message || 'Không thể xóa người dùng. Vui lòng thử lại.');
     } finally {
-      setIsLoading(false);
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+      setUserToDelete(null);
     }
   };
 
@@ -464,6 +475,44 @@ export default function Users() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete User Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-medium">Xác Nhận Xóa Người Dùng</h3>
+              <button 
+                onClick={() => setShowDeleteModal(false)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <FontAwesomeIcon icon="times" className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="mb-4">Bạn có chắc chắn muốn xóa người dùng <strong>{userToDelete?.name}</strong> không?</p>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button 
+                type="button"
+                onClick={() => setShowDeleteModal(false)} 
+                className="btn-outline"
+                disabled={isDeleting}
+              >
+                <FontAwesomeIcon icon="times" className="mr-2" />
+                Hủy Bỏ
+              </button>
+              <button 
+                type="button"
+                onClick={confirmDeleteUser}
+                className="btn"
+                disabled={isDeleting}
+              >
+                <FontAwesomeIcon icon={isDeleting ? 'circle-notch' : 'trash'} className={`mr-2 ${isDeleting ? 'animate-spin' : ''}`} />
+                {isDeleting ? 'Đang Xóa...' : 'Xóa Người Dùng'}
+              </button>
+            </div>
           </div>
         </div>
       )}
