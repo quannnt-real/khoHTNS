@@ -24,14 +24,44 @@ export default function DeviceDetail() {
   const [returnLocationImage, setReturnLocationImage] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
+
+  const [currentUser, setCurrentUser] = useState(null);
+  const [canReturn, setCanReturn] = useState(false);
   
   useEffect(() => {
     if (id) {
       fetchDevice();
       fetchUsers();
+      // Lấy thông tin người dùng hiện tại từ localStorage
+      try {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          setCurrentUser(user);
+        }
+      } catch (err) {
+        console.error('Error parsing user from localStorage:', err);
+      }
     }
   }, [id]);
   
+  // Thêm useEffect mới để kiểm tra quyền trả
+  useEffect(() => {
+    if (device && currentUser) {
+      // Kiểm tra quyền trả
+      const userCanReturn = 
+        // User là người mượn
+        (device.borrower && device.borrower.id === currentUser.id) || 
+        // Hoặc là người được chuyển thiết bị
+        (device.borrowHistory && 
+        device.borrowHistory.length > 0 && 
+        device.borrowHistory[0].transferTo && 
+        device.borrowHistory[0].transferTo.id === currentUser.id);
+      
+      setCanReturn(userCanReturn);
+    }
+  }, [device, currentUser]);
+
   const fetchDevice = async () => {
     try {
       // console.log("Fetching device with ID:", id);
@@ -120,6 +150,11 @@ export default function DeviceDetail() {
       if (!userStr) {
         throw new Error('Vui lòng đăng nhập để trả thiết bị');
       }
+      // Kiểm tra quyền trả thiết bị
+      if (!canReturn) {
+        throw new Error('Bạn không có quyền trả thiết bị này');
+      }
+
       const user = JSON.parse(userStr);
 
       const response = await fetch('/api/borrow', {
@@ -290,12 +325,18 @@ export default function DeviceDetail() {
                   </button>
                 ) : (
                   <>
-                    <button onClick={() => setShowReturnModal(true)} className="btn">
-                      Trả
-                    </button>
-                    <button onClick={() => setShowTransferModal(true)} className="btn-secondary">
-                      Chuyển
-                    </button>
+                    {/* Chỉ hiển thị nút Trả khi có quyền */}
+                    {canReturn && (
+                      <button onClick={() => setShowReturnModal(true)} className="btn">
+                        Trả
+                      </button>
+                    )}
+                    {/* Chỉ hiển thị nút Chuyển khi người dùng là người mượn */}
+                    {currentUser && device.borrower && device.borrower.id === currentUser.id && (
+                      <button onClick={() => setShowTransferModal(true)} className="btn-secondary">
+                        Chuyển
+                      </button>
+                    )}
                   </>
                 )}
               </div>

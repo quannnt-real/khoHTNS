@@ -73,7 +73,32 @@ async function getDevice(req, res, id) {
       ...device,
       formattedHistory,
       // Don't allow return if device was borrowed through event
-      canReturn: device.status === 'borrowed' && device.borrowContext === 'personal'
+      // canReturn: device.status === 'borrowed' && device.borrowContext === 'personal'
+
+      // Check if device can be returned by current user
+      canReturn: (user) => {
+        // User must be authenticated
+        if (!user) return false;
+        
+        // Device must be borrowed
+        if (device.status !== 'borrowed') return false;
+        
+        // If borrowed through event, only allow return through event process
+        if (device.borrowContext === 'event') return false;
+        
+        // User must be either the borrower
+        if (device.borrowerId === user.id) return true;
+        
+        // Or the last person the device was transferred to
+        if (device.borrowHistory.length > 0 && device.borrowContext === 'personal') {
+          const lastHistory = device.borrowHistory[0];
+          if (lastHistory.transferTo && lastHistory.transferTo.id === user.id) {
+            return true;
+          }
+        }
+        
+        return false;
+      }
     };
 
     return res.status(200).json(response);
