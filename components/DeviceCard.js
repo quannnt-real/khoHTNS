@@ -8,7 +8,7 @@ const DeviceCard = ({ device }) => {
   
   // Status translation
   const statusText = isAvailable ? 'Có Sẵn' : 'Đang Mượn';
-  const statusBadge = isAvailable ? 'badge-available' : 'badge-borrowed';
+  const statusBadge = isAvailable ? 'badge-available items-center' : 'badge-borrowed items-start';
   const statusIcon = isAvailable ? 'check' : 'hand-holding';
   
   // Default image if none is provided
@@ -16,19 +16,19 @@ const DeviceCard = ({ device }) => {
   // console.log('Device image URL:', imageUrl, 'for device:', device.name);
   
   return (
-    <Link href={`/devices/${device.id}`} className="card group hover:transform hover:scale-[1.01] transition-all duration-200">
+    <Link href={`/devices/${device.id}`} className="card overflow-hidden hover:shadow-md transition-shadow duration-300 h-full flex flex-col">
       <div className="relative">
-        <div className="relative h-48 w-full">
+        <div className="relative pt-[70%] sm:pt-[56.25%]">
           <Image 
             src={imageUrl}
             alt={device.name}
-            className="object-cover rounded-t-lg"
+            className="absolute top-0 left-0 w-full h-full object-cover"
             fill
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             unoptimized={true}
           />
           <div className="absolute top-2 right-2">
-            <span className={`badge ${statusBadge} flex items-center`}>
+            <span className={`badge ${statusBadge} flex px-2 py-1`}>
               <FontAwesomeIcon icon={statusIcon} className="mr-1 h-3 w-3" />
               {statusText}
             </span>
@@ -36,8 +36,8 @@ const DeviceCard = ({ device }) => {
         </div>
       </div>
       
-      <div className="p-5">
-        <h3 className="text-lg font-semibold text-gray-800 mb-2 truncate">{device.name}</h3>
+      <div className="p-5 flex-1 flex flex-col">
+        <h3 className="font-medium text-gray-900 text-lg mb-1 line-clamp-2">{device.name}</h3>
         
         <div className="space-y-2 mb-4">
           {device.borrower && (

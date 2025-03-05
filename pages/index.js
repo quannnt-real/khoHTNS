@@ -72,41 +72,41 @@ export default function Home() {
     <div>
       {/* Header with stats */}
       <div className="mb-8">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Quản Lý Thiết Bị</h1>
-          <Link href="/devices/new" className="btn">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Quản Lý Thiết Bị</h1>
+          <Link href="/devices/new" className="btn w-full sm:w-auto text-center">
             <FontAwesomeIcon icon="plus" className="mr-2" />
             Thêm Thiết Bị Mới
           </Link>
         </div>
         
-        {/* Stats cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-          <div className="card p-6 flex items-center flex-col sm:flex-row gap-3">
+        {/* Stats cards - optimized for mobile */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <div className="card p-6 flex items-center flex-row gap-3">
             <div className="rounded-full bg-indigo-100 p-3 mr-0 sm:mr-4">
               <FontAwesomeIcon icon="warehouse" className="h-6 w-6 text-indigo-600" />
             </div>
-            <div className='flex flex-col items-center sm:items-start'>
+            <div className='flex flex-row md:flex-col items-center sm:items-start w-full md:w-auto justify-between'>
               <h3 className="text-lg font-medium text-gray-700">Tổng Thiết Bị</h3>
               <p className="text-2xl font-bold text-indigo-600">{stats.total}</p>
             </div>
           </div>
           
-          <div className="card p-6 flex items-center flex-col sm:flex-row gap-3">
+          <div className="card p-6 flex items-center flex-row gap-3">
             <div className="rounded-full bg-indigo-100 p-3 mr-0 sm:mr-4">
               <FontAwesomeIcon icon="check" className="h-6 w-6 text-emerald-600" />
             </div>
-            <div className='flex flex-col items-center sm:items-start'>
+            <div className='flex flex-row md:flex-col items-center sm:items-start w-full md:w-auto justify-between'>
               <h3 className="text-lg font-medium text-gray-700">Có Sẵn</h3>
               <p className="text-2xl font-bold text-emerald-600">{stats.available}</p>
             </div>
           </div>
           
-          <div className="card p-6 flex items-center flex-col sm:flex-row gap-3">
+          <div className="card p-6 flex items-center flex-row gap-3">
             <div className="rounded-full bg-indigo-100 p-3 mr-0 sm:mr-4">
               <FontAwesomeIcon icon="hand-holding" className="h-6 w-6 text-amber-600" />
             </div>
-            <div className='flex flex-col items-center sm:items-start'>
+            <div className='flex flex-row md:flex-col items-center sm:items-start w-full md:w-auto justify-between'>
               <h3 className="text-lg font-medium text-gray-700">Đang Mượn</h3>
               <p className="text-2xl font-bold text-amber-600">{stats.borrowed}</p>
             </div>
@@ -116,49 +116,49 @@ export default function Home() {
       
       {/* Filters and search */}
       <div className="flex flex-col md:flex-row justify-between mb-6 gap-4">
-        <div className="inline-flex rounded-md shadow-sm" role="group">
+        <div className="grid grid-cols-3 w-full md:w-auto shadow-sm" role="group">
           <button 
             onClick={() => setFilter('all')}
-            className={`px-4 py-2 text-sm font-medium rounded-l-lg border border-gray-200 
+            className={`px-2 py-2 text-xs sm:text-sm font-medium rounded-l-lg border border-gray-200
               ${filter === 'all' 
                 ? 'bg-indigo-100 text-indigo-700 border-indigo-100' 
-                : 'bg-white text-gray-700 hover:bg-gray-50'
+                : 'bg-white text-gray-700'
               }`}
           >
-            <FontAwesomeIcon icon="boxes" className="mr-2" />
-            Tất Cả
+            <FontAwesomeIcon icon="boxes" className="mr-1 sm:mr-2 text-xl sm:text-base" />
+            <span className="hidden sm:inline">Tất Cả</span>
           </button>
           <button 
             onClick={() => setFilter('available')}
-            className={`px-4 py-2 text-sm font-medium border-t border-b border-gray-200
+            className={`px-2 py-2 text-xs sm:text-sm font-medium border border-gray-200
               ${filter === 'available' 
                 ? 'bg-emerald-100 text-emerald-700 border-emerald-100' 
                 : 'bg-white text-gray-700 hover:bg-gray-50'
               }`}
           >
-            <FontAwesomeIcon icon="check" className="mr-2" />
-            Có Sẵn
+            <FontAwesomeIcon icon="check" className="mr-1 sm:mr-2 text-xl sm:text-base" />
+            <span className="hidden sm:inline">Có Sẵn</span>
           </button>
           <button 
             onClick={() => setFilter('borrowed')}
-            className={`px-4 py-2 text-sm font-medium rounded-r-lg border border-gray-200
+            className={`px-2 py-2 text-xs sm:text-sm font-medium rounded-r-lg border border-gray-200
               ${filter === 'borrowed' 
                 ? 'bg-amber-100 text-amber-700 border-amber-100' 
                 : 'bg-white text-gray-700 hover:bg-gray-50'
               }`}
           >
-            <FontAwesomeIcon icon="hand-holding" className="mr-2" />
-            Đang Mượn
+            <FontAwesomeIcon icon="hand-holding" className="mr-1 sm:mr-2 text-xl sm:text-base" />
+            <span className="hidden sm:inline">Đang Mượn</span>
           </button>
         </div>
         
-        <div className="relative">
+        <div className="relative w-full md:w-auto">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <FontAwesomeIcon icon="search" className="h-5 w-5 text-gray-400" />
+            <FontAwesomeIcon icon="search" className="h-4 w-4 text-gray-400" />
           </div>
           <input
             type="text"
-            className="form-input pl-10"
+            className="form-input pl-10 w-full"
             placeholder="Tìm kiếm thiết bị..."
             value={searchQuery}
             onChange={handleSearchChange}
