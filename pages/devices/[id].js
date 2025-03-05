@@ -649,8 +649,8 @@ export default function DeviceDetail() {
                               </div>
                               
                               {/* Các nút hành động nếu người dùng hiện tại là người cần xác nhận */}
-                              {((isTransfer && currentUser.id === request.transferTo.id) || 
-                                (!isTransfer && currentUser.id === request.transferFrom.id)) && (
+                              {((isTransfer && currentUser.id === request.transferTo?.id) || 
+                                (!isTransfer && currentUser.id === request.transferFrom?.id)) && (
                                 <div className="flex space-x-2">
                                   <button 
                                     onClick={() => handleConfirmRequest(request.id, 'accept')}

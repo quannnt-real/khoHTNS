@@ -1,6 +1,7 @@
 import { prisma } from '../../../lib/prisma';
 import { sendEmail, generateTransferRequestEmail, generateBorrowRequestEmail } from '../../../lib/emailService';
 import { verifyToken } from '../../../lib/auth';
+import { sendNotificationToUser } from '../../../lib/socketService';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -94,18 +95,40 @@ export default async function handler(req, res) {
         }
       });
       
+      // Lấy thông tin người gửi
+      const sender = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true
+        }
+      });
+      
+      // Tạo thông báo cho người nhận
+      const notification = await prisma.notification.create({
+        data: {
+          userId: toUserId,
+          type: 'transfer_request',
+          title: `Yêu cầu nhận thiết bị: ${device.name}`,
+          message: `${sender.name} muốn chuyển thiết bị "${device.name}" cho bạn`,
+          metadata: JSON.stringify({
+            requestId: transferRequest.id,
+            deviceId: device.id,
+            requesterId: userId
+          })
+        }
+      });
+      
+      // Gửi thông báo real-time qua Socket.IO
+      sendNotificationToUser(toUserId, {
+        ...notification,
+        metadata: JSON.parse(notification.metadata || '{}')
+      });
+      
       // Send email notification to the recipient
       if (recipient.email) {
-        const sender = await prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            email: true
-          }
-        });
-        
         const baseUrl = getBaseUrl(req);
         const emailContent = generateTransferRequestEmail({
           device,
@@ -168,6 +191,27 @@ export default async function handler(req, res) {
           transferStatus: 'pending',
           borrowContext: 'personal'
         }
+      });
+      
+      // Tạo thông báo cho người đang mượn
+      const notification = await prisma.notification.create({
+        data: {
+          userId: device.borrowerId,
+          type: 'borrow_request',
+          title: `Yêu cầu mượn thiết bị: ${device.name}`,
+          message: `${requester.name} muốn mượn thiết bị "${device.name}" từ bạn`,
+          metadata: JSON.stringify({
+            requestId: borrowRequest.id,
+            deviceId: device.id,
+            requesterId: userId
+          })
+        }
+      });
+      
+      // Gửi thông báo real-time qua Socket.IO
+      sendNotificationToUser(device.borrowerId, {
+        ...notification,
+        metadata: JSON.parse(notification.metadata || '{}')
       });
       
       // Send email notification to the current borrower

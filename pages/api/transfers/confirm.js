@@ -1,5 +1,6 @@
 import { prisma } from '../../../lib/prisma';
 import { sendEmail, generateNotificationEmail } from '../../../lib/emailService';
+import { sendNotificationToUser } from '../../../lib/socketService';
 
 export default async function handler(req, res) {
   // Accept both GET (from email links) and POST (from UI)
@@ -167,6 +168,38 @@ export default async function handler(req, res) {
     });
     
     // Notify the requester/sender
+    const requesterId = transferRequest.userId;
+    
+    // Tạo thông báo cho người yêu cầu
+    const notificationTitle = action === 'accept' 
+      ? `Yêu cầu ${requestType === 'transfer' ? 'chuyển' : 'mượn'} thiết bị được chấp nhận` 
+      : `Yêu cầu ${requestType === 'transfer' ? 'chuyển' : 'mượn'} thiết bị bị từ chối`;
+    
+    const notificationMessage = action === 'accept'
+      ? `Yêu cầu ${requestType === 'transfer' ? 'chuyển' : 'mượn'} thiết bị "${device.name}" đã được chấp nhận`
+      : `Yêu cầu ${requestType === 'transfer' ? 'chuyển' : 'mượn'} thiết bị "${device.name}" đã bị từ chối`;
+      
+    const notification = await prisma.notification.create({
+      data: {
+        userId: requesterId,
+        type: 'confirmation',
+        title: notificationTitle,
+        message: notificationMessage,
+        metadata: JSON.stringify({
+          requestId: id,
+          deviceId: transferRequest.deviceId,
+          action: action
+        })
+      }
+    });
+    
+    // Gửi thông báo real-time qua Socket.IO
+    sendNotificationToUser(requesterId, {
+      ...notification,
+      metadata: JSON.parse(notification.metadata || '{}')
+    });
+    
+    // Gửi email thông báo
     if (transferRequest.user.email) {
       const emailContent = generateNotificationEmail({
         device,

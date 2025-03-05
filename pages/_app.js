@@ -8,6 +8,7 @@ import { AuthProvider } from '../lib/AuthContext';
 import ProtectedRoute from '../lib/ProtectedRoute';
 import { useRouter } from 'next/router';
 import { SessionProvider } from 'next-auth/react';
+import { NotificationProvider } from '../components/NotificationProvider';
 
 // Prevent Font Awesome icons from flashing large icons before CSS loads
 config.autoAddCss = false;
@@ -41,15 +42,17 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }) {
   return (
     <SessionProvider session={session}>
       <AuthProvider>
-        <ProtectedRoute>
-          {useLayout ? (
-            <Layout>
+        <NotificationProvider>
+          <ProtectedRoute>
+            {useLayout ? (
+              <Layout>
+                <Component {...pageProps} />
+              </Layout>
+            ) : (
               <Component {...pageProps} />
-            </Layout>
-          ) : (
-            <Component {...pageProps} />
-          )}
-        </ProtectedRoute>
+            )}
+          </ProtectedRoute>
+        </NotificationProvider>
       </AuthProvider>
     </SessionProvider>
   );

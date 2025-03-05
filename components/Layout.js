@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useAuth } from '../lib/AuthContext';
+import NotificationSidebar from './NotificationSidebar';
 
 const Layout = ({ children, title = 'Quản Lý Kho Thiết Bị' }) => {
   const router = useRouter();
@@ -181,6 +182,9 @@ const Layout = ({ children, title = 'Quản Lý Kho Thiết Bị' }) => {
               </p>
             </div>
           </footer>
+          
+          {/* Notification Sidebar */}
+          {user && <NotificationSidebar />}
         </div>
       </div>
     </div>

@@ -42,6 +42,7 @@ model User {
   borrowHistory     BorrowHistory[] @relation("UserBorrowHistory")
   transferredToHistory BorrowHistory[] @relation("TransferredTo")
   transferredFromHistory BorrowHistory[] @relation("TransferredFrom")
+  notifications     Notification[]  @relation("UserNotifications")
   createdEvents     Event[]         @relation("EventCreator")
   updatedEvents     Event[]         @relation("EventUpdater")
   createdAt         DateTime        @default(now())
@@ -109,4 +110,19 @@ model EventDevice {
 
   @@index([eventId])
   @@index([deviceId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String   // "transfer_request", "borrow_request", "confirmation"
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  metadata  String?  // JSON serialized data (requestId, deviceId, etc.)
+  user      User     @relation("UserNotifications", fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }

@@ -11,6 +11,7 @@ export default async function handler(req, res) {
         id: true,
         name: true,
         phone: true,
+        email: true,
         // Lấy danh sách thiết bị đang mượn thay vì chỉ đếm
         borrowedDevices: {
           where: {
@@ -55,6 +56,7 @@ export default async function handler(req, res) {
         id: user.id,
         name: user.name,
         phone: user.phone,
+        email: user.email,
         borrowedDevicesCount: {
           direct: directBorrowCount,
           events: eventDevicesCount,
