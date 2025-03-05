@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useAuth } from '../lib/AuthContext';
+import NotificationSidebar from './NotificationSidebar';
 
 const Layout = ({ children, title = 'Quản Lý Kho Thiết Bị' }) => {
   const router = useRouter();
@@ -66,9 +67,16 @@ const Layout = ({ children, title = 'Quản Lý Kho Thiết Bị' }) => {
                       </p>
                     </div>
                   </div>
+                  <Link 
+                    href="/notifications"
+                    className="mt-3 w-full flex items-center justify-center px-3 py-2 text-xs font-medium rounded-md bg-indigo-800 hover:bg-indigo-600 text-white"
+                  >
+                    <FontAwesomeIcon icon="bell" className="h-3 w-3 mr-2" />
+                    Quản lý thông báo
+                  </Link>
                   <button 
                     onClick={logout}
-                    className="mt-3 w-full flex items-center justify-center px-3 py-2 text-xs font-medium rounded-md bg-indigo-800 hover:bg-indigo-600 text-white"
+                    className="mt-2 w-full flex items-center justify-center px-3 py-2 text-xs font-medium rounded-md bg-indigo-800 hover:bg-indigo-600 text-white"
                   >
                     <FontAwesomeIcon icon="sign-out-alt" className="h-3 w-3 mr-2" />
                     Đăng xuất
@@ -135,6 +143,14 @@ const Layout = ({ children, title = 'Quản Lý Kho Thiết Bị' }) => {
                           {user.role === 'admin' ? 'Quản trị viên' : 'Người dùng'}
                         </p>
                       </div>
+                      <Link 
+                        href="/notifications"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        onClick={() => setUserMenuOpen(false)}
+                      >
+                        <FontAwesomeIcon icon="bell" className="mr-2" />
+                        Quản lý thông báo
+                      </Link>
                       <button
                         onClick={logout}
                         className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -181,6 +197,9 @@ const Layout = ({ children, title = 'Quản Lý Kho Thiết Bị' }) => {
               </p>
             </div>
           </footer>
+          
+          {/* Notification Sidebar */}
+          {user && <NotificationSidebar />}
         </div>
       </div>
     </div>

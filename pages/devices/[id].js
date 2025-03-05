@@ -28,8 +28,15 @@ export default function DeviceDetail() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
-// Thêm state isAdmin
+  // Thêm state isAdmin
   const [isAdmin, setIsAdmin] = useState(false);
+  // Thêm state cho yêu cầu mượn và chuyển thiết bị
+  const [requestLoading, setRequestLoading] = useState(false);
+  const [requestError, setRequestError] = useState('');
+  const [requestSuccess, setRequestSuccess] = useState(false);
+  // Thêm state cho yêu cầu đang chờ xử lý
+  const [pendingRequests, setPendingRequests] = useState([]);
+  const [checkTwoPerson, setCheckTwoPerson] = useState(false);
   
   useEffect(() => {
     // Add logging
@@ -45,7 +52,7 @@ export default function DeviceDetail() {
         if (userStr) {
           const user = JSON.parse(userStr);
           setCurrentUser(user);
-// Kiểm tra xem người dùng có phải là admin không
+          // Kiểm tra xem người dùng có phải là admin không
           setIsAdmin(user.role === 'admin');
         }
       } catch (err) {
@@ -55,23 +62,73 @@ export default function DeviceDetail() {
       // console.log("No device ID available yet");
     }
   }, [id]);
+  
+  // Thêm useEffect để lấy yêu cầu đang chờ xử lý khi có currentUser
+  useEffect(() => {
+    if (currentUser && id) {
+      fetchPendingRequests();
+      
+      // Set up polling interval to refresh pending requests periodically
+      const intervalId = setInterval(() => {
+        fetchPendingRequests();
+      }, 10000); // Refresh every 10 seconds
+      
+      return () => clearInterval(intervalId); // Clean up on unmount
+    }
+  }, [currentUser, id]);
 
-  // Thêm useEffect mới để kiểm tra quyền trả
+  // Thêm useEffect mới để kiểm tra quyền trả - chỉ người đang giữ thiết bị mới thấy nút trả
   useEffect(() => {
     if (device && currentUser) {
-      // Kiểm tra quyền trả
-      const userCanReturn = 
-        // User là người mượn
-        (device.borrower && device.borrower.id === currentUser.id) || 
-        // Hoặc là người được chuyển thiết bị
-        (device.borrowHistory && 
-        device.borrowHistory.length > 0 && 
-        device.borrowHistory[0].transferTo && 
-        device.borrowHistory[0].transferTo.id === currentUser.id);
+      // Kiểm tra người mượn ban đầu
+      let isOriginalBorrower = device.borrower && device.borrower.id === currentUser.id;
+      
+      // Kiểm tra nếu đã chuyển cho người khác và đã được xác nhận
+      let hasBeenTransferred = false;
+      if (device.borrowHistory && device.borrowHistory.length > 0) {
+        const lastHistory = device.borrowHistory[0];
+        // Nếu có transferTo và đã xác nhận (có returnDate), thì người được chuyển là người giữ thiết bị
+        if (lastHistory.transferTo && lastHistory.returnDate) {
+          hasBeenTransferred = true;
+          isOriginalBorrower = false; // Người mượn ban đầu không còn giữ thiết bị
+        }
+      }
+      
+      // Người hiện tại đang giữ thiết bị là người được chuyển
+      const isCurrentHolder = device.borrowHistory && 
+                           device.borrowHistory.length > 0 && 
+                           device.borrowHistory[0].transferTo && 
+                           device.borrowHistory[0].transferTo.id === currentUser.id && 
+                           device.borrowHistory[0].returnDate; // Đã xác nhận chuyển
+      
+      // Người có quyền trả là người đang giữ thiết bị: 
+      // hoặc là người mượn ban đầu (nếu chưa chuyển), 
+      // hoặc là người được chuyển (nếu đã chuyển và xác nhận)
+      const userCanReturn = (isOriginalBorrower && !hasBeenTransferred) || isCurrentHolder;
       
       setCanReturn(userCanReturn);
     }
   }, [device, currentUser]);
+  
+  // Hàm kiểm tra email người mượn
+  const checkBorrowerEmail = async (borrowerId) => {
+    if (!borrowerId) return null;
+    
+    try {
+      // Lấy thông tin đầy đủ của người mượn từ API
+      const response = await fetch(`/api/users/${borrowerId}`);
+      
+      if (!response.ok) {
+        console.error('Failed to fetch borrower information');
+        return null;
+      }
+      
+      return await response.json();
+    } catch (err) {
+      console.error('Error checking borrower email:', err);
+      return null;
+    }
+  };
   
   const fetchDevice = async () => {
     try {
@@ -106,6 +163,33 @@ export default function DeviceDetail() {
       setUsers(data);
     } catch (err) {
       console.error('Error fetching users:', err);
+    }
+  };
+  
+  // Thêm hàm để lấy các yêu cầu đang chờ xử lý
+  const fetchPendingRequests = async () => {
+    try {
+      // Chỉ lấy yêu cầu nếu user đã đăng nhập
+      if (!currentUser) return;
+      
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      const response = await fetch(`/api/transfers/pending?deviceId=${id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to fetch pending requests');
+        return;
+      }
+      
+      const data = await response.json();
+      setPendingRequests(data.requests);
+    } catch (err) {
+      console.error('Error fetching pending requests:', err);
     }
   };
   
@@ -222,7 +306,7 @@ export default function DeviceDetail() {
   
   const handleTransfer = async () => {
     if (!transferUserId) {
-      setActionError('Please select a user');
+      setActionError('Vui lòng chọn người nhận');
       return;
     }
     
@@ -230,30 +314,97 @@ export default function DeviceDetail() {
     setActionError('');
     
     try {
-      const response = await fetch('/api/borrow/transfer', {
+      // Kiểm tra xem người nhận có email không
+      const recipient = users.find(user => user.id === transferUserId);
+      if (!recipient || !recipient.email) {
+        throw new Error('Người nhận cần có email để nhận thông báo xác nhận.');
+      }
+      
+      // Tạo yêu cầu chuyển thiết bị qua API mới
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Bạn cần đăng nhập lại để thực hiện thao tác này.');
+      }
+      
+      const response = await fetch('/api/transfers/request', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           deviceId: id,
-          fromUserId: device.borrowerId,
-          toUserId: transferUserId
+          toUserId: transferUserId,
+          requestType: 'transfer'
         }),
       });
       
+      const data = await response.json();
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to transfer device');
+        throw new Error(data.message || 'Không thể tạo yêu cầu chuyển thiết bị');
       }
       
       setShowTransferModal(false);
-      fetchDevice(); // Refresh device data
+      alert(`Đã gửi yêu cầu chuyển thiết bị đến ${recipient.name}. Người nhận sẽ nhận được email xác nhận.`);
     } catch (err) {
       console.error('Error transferring device:', err);
-      setActionError(err.message || 'Failed to transfer device. Please try again.');
+      setActionError(err.message || 'Lỗi khi chuyển thiết bị. Vui lòng thử lại.');
     } finally {
       setActionLoading(false);
+    }
+  };
+  
+  // Thêm hàm xử lý yêu cầu mượn thiết bị
+  const handleBorrowRequest = async () => {
+    setRequestLoading(true);
+    setRequestError('');
+    setRequestSuccess(false);
+    
+    try {
+      // Kiểm tra xem thiết bị có đang được mượn không
+      if (!device.borrower) {
+        throw new Error('Thiết bị này chưa được ai mượn.');
+      }
+      
+      // Kiểm tra người mượn trong dữ liệu đầy đủ
+      const borrower = await checkBorrowerEmail(device.borrowerId);
+      if (!borrower || !borrower.email) {
+        throw new Error('Người đang mượn thiết bị không có email để nhận thông báo xác nhận.');
+      }
+      
+      // Tạo yêu cầu mượn thiết bị
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Bạn cần đăng nhập lại để thực hiện thao tác này.');
+      }
+      
+      const response = await fetch('/api/transfers/request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          deviceId: id,
+          requestType: 'borrow'
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Không thể tạo yêu cầu mượn thiết bị');
+      }
+      
+      setRequestSuccess(true);
+      alert(`Đã gửi yêu cầu mượn thiết bị đến ${device.borrower.name}. Bạn sẽ nhận được thông báo khi người dùng phản hồi.`);
+    } catch (err) {
+      console.error('Error requesting device:', err);
+      setRequestError(err.message || 'Lỗi khi yêu cầu mượn thiết bị. Vui lòng thử lại.');
+      alert(err.message || 'Lỗi khi yêu cầu mượn thiết bị. Vui lòng thử lại.');
+    } finally {
+      setRequestLoading(false);
     }
   };
   
@@ -279,6 +430,72 @@ export default function DeviceDetail() {
     } catch (err) {
       console.error('Error uploading image:', err);
       setActionError('Failed to upload image. Please try again.');
+    }
+  };
+  
+  // Thêm hàm xử lý xác nhận yêu cầu
+  const handleConfirmRequest = async (requestId, action) => {
+    try {
+      setActionLoading(true);
+      
+      // Tạm thời xóa yêu cầu khỏi UI để tránh xử lý kép
+      const request = pendingRequests.find(req => req.id === requestId);
+      setPendingRequests(prev => prev.filter(req => req.id !== requestId));
+      
+      const response = await fetch('/api/transfers/confirm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: requestId,
+          action
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        // Nếu có lỗi, khôi phục lại yêu cầu trong UI
+        setPendingRequests(prev => [...prev, request].sort((a, b) => 
+          new Date(b.createdAt) - new Date(a.createdAt)
+        ));
+        throw new Error(data.message || 'Có lỗi xảy ra khi xử lý yêu cầu');
+      }
+      
+      // Đánh dấu thông báo liên quan là đã đọc (nếu có)
+      if (request) {
+        try {
+          // Gửi yêu cầu để tìm và đánh dấu các thông báo liên quan
+          const token = localStorage.getItem('token');
+          if (token) {
+            await fetch(`/api/notifications/mark-by-request`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                requestId: requestId
+              })
+            });
+          }
+        } catch (e) {
+          console.error('Error marking notifications as read:', e);
+        }
+      }
+      
+      // Cập nhật lại dữ liệu thiết bị và yêu cầu đang chờ
+      await fetchDevice();
+      await fetchPendingRequests();
+      
+      // Hiển thị thông báo
+      alert(action === 'accept' ? 'Đã xác nhận yêu cầu thành công!' : 'Đã từ chối yêu cầu!');
+    } catch (err) {
+      console.error('Error confirming request:', err);
+      alert(err.message || 'Có lỗi xảy ra khi xử lý yêu cầu. Vui lòng thử lại.');
+    } finally {
+      setActionLoading(false);
     }
   };
   
@@ -368,7 +585,8 @@ export default function DeviceDetail() {
                     </span>
                   )}
                   
-                  {device.borrowHistory && device.borrowHistory.length > 0 && device.borrowHistory[0].transferTo && (
+                  {device.borrowHistory && device.borrowHistory.length > 0 && 
+                   device.borrowHistory[0].transferTo && device.borrowHistory[0].returnDate && (
                     <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
                       Đã Chuyển
                     </span>
@@ -394,6 +612,13 @@ export default function DeviceDetail() {
                     {currentUser && device.borrower && device.borrower.id === currentUser.id && (
                       <button onClick={() => setShowTransferModal(true)} className="btn-secondary">
                         Chuyển
+                      </button>
+                    )}
+                    
+                    {/* Nút Yêu cầu mượn cho người không phải người mượn hiện tại */}
+                    {currentUser && device.borrower && device.borrower.id !== currentUser.id && (
+                      <button onClick={() => handleBorrowRequest()} className="btn-outline">
+                        Yêu cầu mượn
                       </button>
                     )}
                   </>
@@ -446,7 +671,9 @@ export default function DeviceDetail() {
                     </div>
                   )}
                   
-                  {device.borrowHistory && device.borrowHistory.length > 0 && device.borrowHistory[0].transferTo && (
+                  {/* Hiển thị thông tin đã chuyển thiết bị khi có returnDate (đã xác nhận) */}
+                  {device.borrowHistory && device.borrowHistory.length > 0 && 
+                   device.borrowHistory[0].transferTo && device.borrowHistory[0].returnDate && (
                     <div>
                       <p className="text-sm text-gray-600 font-medium">Đã chuyển cho:</p>
                       <p className="text-sm text-gray-800">
@@ -454,7 +681,9 @@ export default function DeviceDetail() {
                       </p>
                     </div>
                   )}
+                  
                 </div>
+                
               </div>
             )}
             
@@ -545,89 +774,101 @@ export default function DeviceDetail() {
                       Người mượn
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ngày mượn
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ngày trả
+                      Thời gian
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Trạng thái
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ghi chú
+                      Chuyển cho
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {device.borrowHistory.map((history) => (
-                    <tr key={history.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{history.user.name}</div>
-                        <div className="text-sm text-gray-500">{history.user.phone}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(history.borrowDate).toLocaleDateString('vi-VN', {
-                          year: 'numeric',
-                          month: 'numeric',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {history.returnDate ? 
-                          new Date(history.returnDate).toLocaleDateString('vi-VN', {
-                            year: 'numeric',
-                            month: 'numeric',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          }) : '—'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {history.returnDate ? (
-                          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
-                            Đã trả
-                          </span>
-                        ) : history.transferTo ? (
-                          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
-                            Đã chuyển
-                          </span>
-                        ) : (
-                          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
-                            Đang mượn
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {history.event ? (
-                        <div className="flex items-center">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                          </svg>
-                          <span>Mượn cho sự kiện: <span className="font-medium">{history.event.title}</span></span>
-                        </div>
-                      ) : history.transferTo ? (
-                        <div className="flex items-center">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-purple-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8z" />
-                            <path d="M12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z" />
-                          </svg>
-                          <span>Chuyển cho {history.transferTo.name}</span>
-                        </div>
-                      ) : history.returnDate ? (
-                        <div className="flex items-center">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                          <span>Trả đúng hạn</span>
-                        </div>
-                      ) : (
-                        '—'
-                      )}
-                      </td>
-                    </tr>
-                  ))}
+                  {(() => {
+                    // Mảng lưu các bản ghi lịch sử sau khi xử lý
+                    const processedHistories = [];
+                    
+                    // Xử lý từng bản ghi gốc để tạo các bản ghi hiển thị
+                    device.borrowHistory.forEach(history => {
+                      // 1. Bản ghi Mượn - luôn tạo từ mọi bản ghi lịch sử
+                      processedHistories.push({
+                        id: `borrow-${history.id}`,
+                        type: 'borrow',
+                        user: history.user,
+                        time: history.borrowDate,
+                        transferTo: null
+                      });
+                      
+                      // 2. Bản ghi Trả - tạo nếu có returnDate và không phải là chuyển
+                      if (history.returnDate && !history.transferTo) {
+                        processedHistories.push({
+                          id: `return-${history.id}`,
+                          type: 'return',
+                          user: history.user,
+                          time: history.returnDate,
+                          transferTo: null
+                        });
+                      }
+                      
+                      // 3. Bản ghi Chuyển - tạo nếu có returnDate và có thông tin chuyển
+                      if (history.returnDate && history.transferTo) {
+                        processedHistories.push({
+                          id: `transfer-${history.id}`,
+                          type: 'transfer',
+                          user: history.user,
+                          time: history.returnDate,
+                          transferTo: history.transferTo
+                        });
+                      }
+                    });
+                    
+                    // Sắp xếp theo thời gian mới nhất trước
+                    return processedHistories
+                      .sort((a, b) => new Date(b.time) - new Date(a.time))
+                      .map(record => (
+                        <tr key={record.id}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">{record.user.name}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {new Date(record.time).toLocaleDateString('vi-VN', {
+                              year: 'numeric',
+                              month: 'numeric',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {record.type === 'return' ? (
+                              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                                Đã trả
+                              </span>
+                            ) : record.type === 'transfer' ? (
+                              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
+                                Chuyển
+                              </span>
+                            ) : (
+                              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
+                                Mượn
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {record.transferTo ? (
+                              <div className="flex items-center">
+                                <span>
+                                  <strong>{record.transferTo.name}</strong>
+                                </span>
+                              </div>
+                            ) : (
+                              <>—</>
+                            )}
+                          </td>
+                        </tr>
+                      ));
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -816,7 +1057,7 @@ export default function DeviceDetail() {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                 </svg>
-                <h3 className="text-lg font-medium">Chuyển thiết bị cho người khác</h3>
+                <h3 className="text-lg font-medium">Yêu cầu chuyển thiết bị cho người khác</h3>
               </div>
               <button 
                 onClick={() => setShowTransferModal(false)} 
@@ -833,7 +1074,7 @@ export default function DeviceDetail() {
               <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-md text-sm">
                 <div className="flex">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-  0 1 1 0 01  0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-  0 1 1 0 01  0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
                   <span>{actionError}</span>
                 </div>
@@ -873,7 +1114,7 @@ export default function DeviceDetail() {
                 )}
                 
                 <div>
-                  <p className="text-sm text-gray-600 font-medium">Thời gian chuyển:</p>
+                  <p className="text-sm text-gray-600 font-medium">Thời gian yêu cầu:</p>
                   <p className="text-sm text-gray-800">
                     {new Date().toLocaleDateString('vi-VN', {
                       year: 'numeric',
@@ -908,7 +1149,7 @@ export default function DeviceDetail() {
                   {users
                     .filter(user => user.id !== device.borrowerId)
                     .map(user => (
-                      <option key={user.id} value={user.id}>{user.name} ({user.phone})</option>
+                      <option key={user.id} value={user.id}>{user.name} ({user.phone || 'Không có SĐT'}){!user.email && ' (Không có email)'}</option>
                     ))
                   }
                 </select>
@@ -920,19 +1161,24 @@ export default function DeviceDetail() {
               </div>
               
               <p className="mt-2 text-xs text-gray-500">
-                Sau khi chuyển, người nhận sẽ chịu trách nhiệm với thiết bị này
+                Người nhận cần có địa chỉ email để nhận thông báo xác nhận
               </p>
             </div>
             
-            <div className="mt-2 p-3 bg-yellow-50 rounded-md text-sm text-yellow-700">
+            <div className="mt-4 p-3 bg-yellow-50 rounded-md text-sm text-yellow-700">
               <div className="flex">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
-                <span>
-                  Thao tác này sẽ chuyển trách nhiệm thiết bị từ <strong>{device.borrower?.name}</strong> sang người được chọn.
-                  Lịch sử mượn trả sẽ được ghi nhận.
-                </span>
+                <div>
+                  <p className="font-medium mb-1">Quy trình xác nhận 2 chiều</p>
+                  <p>
+                    1. Bạn gửi yêu cầu chuyển thiết bị đến người được chọn<br />
+                    2. Người nhận sẽ nhận được email xác nhận<br />
+                    3. Khi người nhận xác nhận, thiết bị sẽ được chuyển sang người đó<br />
+                    4. Cả hai bên sẽ nhận được thông báo kết quả
+                  </p>
+                </div>
               </div>
             </div>
             
@@ -963,7 +1209,7 @@ export default function DeviceDetail() {
                       <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8z" />
                       <path d="M12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z" />
                     </svg>
-                    Xác nhận chuyển thiết bị
+                    Gửi yêu cầu chuyển thiết bị
                   </>
                 )}
               </button>
