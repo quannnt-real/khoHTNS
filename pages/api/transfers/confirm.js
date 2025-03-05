@@ -178,7 +178,20 @@ export default async function handler(req, res) {
     const notificationMessage = action === 'accept'
       ? `Yêu cầu ${requestType === 'transfer' ? 'chuyển' : 'mượn'} thiết bị "${device.name}" đã được chấp nhận`
       : `Yêu cầu ${requestType === 'transfer' ? 'chuyển' : 'mượn'} thiết bị "${device.name}" đã bị từ chối`;
+    
+    // Đánh dấu các thông báo liên quan đến yêu cầu này là đã đọc
+    await prisma.notification.updateMany({
+      where: {
+        metadata: {
+          contains: id
+        }
+      },
+      data: {
+        read: true
+      }
+    });
       
+    // Tạo thông báo mới với trạng thái đã cập nhật
     const notification = await prisma.notification.create({
       data: {
         userId: requesterId,
@@ -188,7 +201,8 @@ export default async function handler(req, res) {
         metadata: JSON.stringify({
           requestId: id,
           deviceId: transferRequest.deviceId,
-          action: action
+          action: action,
+          transferStatus: action === 'accept' ? 'accepted' : 'rejected'
         })
       }
     });

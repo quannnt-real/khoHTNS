@@ -93,26 +93,40 @@ export default function NotificationSidebar() {
                         <p className="mt-1 text-sm text-gray-700">{notification.message}</p>
                         
                         {/* Nút xác nhận/từ chối cho thông báo yêu cầu chưa đọc */}
-                        {(notification.type === 'transfer_request' || notification.type === 'borrow_request') && !notification.read && (
+                        {(notification.type === 'transfer_request' || notification.type === 'borrow_request') && (
                           <div className="mt-3 flex justify-end space-x-2">
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleNotificationAction(notification.id, 'reject');
-                              }}
-                              className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
-                            >
-                              Từ chối
-                            </button>
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleNotificationAction(notification.id, 'accept');
-                              }}
-                              className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
-                            >
-                              Xác nhận
-                            </button>
+                            {notification.processing ? (
+                              <span className="text-xs text-gray-500">Đang xử lý...</span>
+                            ) : notification.action || notification.transferStatus ? (
+                              <span className="text-xs text-gray-500">
+                                Đã {(notification.action === 'accept' || notification.transferStatus === 'accepted') ? 'chấp nhận' : 'từ chối'}
+                              </span>
+                            ) : notification.read ? (
+                              <span className="text-xs text-gray-500">Đã xử lý</span>
+                            ) : (
+                              <>
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleNotificationAction(notification.id, 'reject');
+                                  }}
+                                  className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50"
+                                  disabled={notification.processing || notification.read}
+                                >
+                                  Từ chối
+                                </button>
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleNotificationAction(notification.id, 'accept');
+                                  }}
+                                  className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50"
+                                  disabled={notification.processing || notification.read}
+                                >
+                                  Xác nhận
+                                </button>
+                              </>
+                            )}
                           </div>
                         )}
                       </div>

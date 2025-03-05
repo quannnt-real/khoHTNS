@@ -20,7 +20,7 @@ export function NotificationProvider({ children }) {
         const token = localStorage.getItem('token');
         if (!token) return;
         
-        const response = await fetch('/api/notifications', {
+        const response = await fetch('/api/notifications?limit=5', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -28,8 +28,14 @@ export function NotificationProvider({ children }) {
         
         if (response.ok) {
           const data = await response.json();
-          setNotifications(data.notifications);
-          setUnreadCount(data.notifications.filter(n => !n.read).length);
+          
+          // Sắp xếp thông báo theo thời gian gần nhất
+          const sortedNotifications = data.notifications.sort((a, b) => 
+            new Date(b.createdAt) - new Date(a.createdAt)
+          );
+          
+          setNotifications(sortedNotifications);
+          setUnreadCount(sortedNotifications.filter(n => !n.read).length);
         }
       } catch (error) {
         console.error('Error fetching notifications:', error);
@@ -37,6 +43,11 @@ export function NotificationProvider({ children }) {
     };
 
     fetchNotifications();
+    
+    // Thiết lập interval để cập nhật thông báo mỗi 30 giây
+    const intervalId = setInterval(fetchNotifications, 30000);
+    
+    return () => clearInterval(intervalId);
   }, []);
 
   // Thiết lập Socket.IO khi component mount
@@ -55,13 +66,62 @@ export function NotificationProvider({ children }) {
     socketInstance.on('notification', (notification) => {
       console.log('Received notification:', notification);
       
-      // Thêm thông báo mới vào state
-      setNotifications(prev => [notification, ...prev]);
-      setUnreadCount(prev => prev + 1);
+      // Kiểm tra trùng lặp thông báo trước khi thêm
+      setNotifications(prev => {
+        // Kiểm tra xem thông báo đã tồn tại chưa
+        const exists = prev.some(n => n.id === notification.id);
+        if (exists) return prev;
+        
+        // Lấy metadata của thông báo mới
+        const metadata = typeof notification.metadata === 'string' 
+          ? JSON.parse(notification.metadata || '{}') 
+          : notification.metadata;
+        
+        let updatedNotifications = [...prev];
+        
+        // Nếu là thông báo xác nhận (accepted/rejected), cập nhật hoặc loại bỏ các thông báo liên quan
+        if (notification.type === 'confirmation' && metadata && metadata.requestId) {
+          // Đánh dấu tất cả thông báo liên quan đến cùng một requestId là đã đọc
+          updatedNotifications = updatedNotifications.map(n => {
+            const nMetadata = typeof n.metadata === 'string'
+              ? JSON.parse(n.metadata || '{}')
+              : n.metadata;
+              
+            if (nMetadata && nMetadata.requestId === metadata.requestId) {
+              return { 
+                ...n, 
+                read: true, 
+                transferStatus: metadata.transferStatus || (metadata.action === 'accept' ? 'accepted' : 'rejected') 
+              };
+            }
+            return n;
+          });
+          
+          // Thêm thông báo mới vào danh sách
+          return [notification, ...updatedNotifications];
+        }
+        
+        // Đối với các thông báo thông thường, thêm vào đầu danh sách
+        return [notification, ...prev];
+      });
       
-      // Hiển thị modal với thông báo mới
-      setCurrentNotification(notification);
-      setShowModal(true);
+      // Cập nhật số lượng thông báo chưa đọc
+      setUnreadCount(prev => {
+        const unreadNotifsCount = notifications.filter(n => !n.read).length + 1;
+        return unreadNotifsCount;
+      });
+      
+      // Hiển thị modal với thông báo mới nếu không phải là thông báo xác nhận từ chối
+      const metadata = typeof notification.metadata === 'string' 
+        ? JSON.parse(notification.metadata || '{}') 
+        : notification.metadata;
+        
+      const shouldShowModal = !(notification.type === 'confirmation' && metadata && metadata.action === 'reject');
+      
+      if (shouldShowModal) {
+        setCurrentNotification(notification);
+        setShowModal(true);
+      }
     });
 
     socketInstance.on('disconnect', () => {
@@ -84,8 +144,24 @@ export function NotificationProvider({ children }) {
   // Xử lý xác nhận hoặc từ chối thông báo
   const handleNotificationAction = async (notificationId, action) => {
     try {
+      // Tìm thông báo và kiểm tra
       const notification = notifications.find(n => n.id === notificationId);
       if (!notification) return;
+      
+      // Kiểm tra nếu thông báo đã được đọc (xử lý) rồi thì bỏ qua
+      if (notification.read) {
+        alert('Thông báo này đã được xử lý');
+        return;
+      }
+      
+      // Tạm thời đánh dấu là đang xử lý để tránh xử lý đồng thời
+      // Cập nhật UI ngay lập tức để vô hiệu hóa các nút thao tác
+      setNotifications(prev => prev.map(n => {
+        if (n.id === notificationId) {
+          return { ...n, processing: true };
+        }
+        return n;
+      }));
       
       const metadata = typeof notification.metadata === 'string' 
         ? JSON.parse(notification.metadata || '{}') 
@@ -107,19 +183,52 @@ export function NotificationProvider({ children }) {
         // Cập nhật thông báo đã đọc
         await markAsRead(notificationId);
         
+        // Cập nhật tất cả các thông báo liên quan để hiển thị đúng trạng thái
+        setNotifications(prev => prev.map(n => {
+          const nMetadata = typeof n.metadata === 'string'
+            ? JSON.parse(n.metadata || '{}')
+            : n.metadata;
+            
+          // Đánh dấu tất cả thông báo có cùng requestId là đã đọc
+          if (nMetadata && metadata && nMetadata.requestId === metadata.requestId) {
+            return { ...n, read: true, processing: false, action: action };
+          }
+          return n;
+        }));
+        
         // Đóng modal
         setShowModal(false);
         
-        // Nếu là xác nhận từ modal, chuyển hướng đến trang chi tiết thiết bị
+        // Thông báo thành công
+        alert(`Đã ${action === 'accept' ? 'chấp nhận' : 'từ chối'} yêu cầu thành công`);
+        
+        // Nếu là xác nhận, chuyển hướng đến trang chi tiết thiết bị
         if (action === 'accept' && metadata.deviceId) {
           router.push(`/devices/${metadata.deviceId}`);
         }
       } else {
+        // Xử lý lỗi và khôi phục trạng thái
+        setNotifications(prev => prev.map(n => {
+          if (n.id === notificationId) {
+            return { ...n, processing: false };
+          }
+          return n;
+        }));
+        
         const errorData = await response.json();
         alert(errorData.message || 'Có lỗi xảy ra khi xử lý yêu cầu');
       }
     } catch (error) {
       console.error('Error handling notification action:', error);
+      
+      // Khôi phục trạng thái nếu có lỗi
+      setNotifications(prev => prev.map(n => {
+        if (n.id === notificationId) {
+          return { ...n, processing: false };
+        }
+        return n;
+      }));
+      
       alert('Có lỗi xảy ra khi xử lý yêu cầu');
     }
   };
@@ -173,18 +282,52 @@ export function NotificationProvider({ children }) {
             
             {(currentNotification.type === 'transfer_request' || currentNotification.type === 'borrow_request') ? (
               <div className="flex justify-end space-x-3">
-                <button 
-                  onClick={() => handleNotificationAction(currentNotification.id, 'reject')}
-                  className="btn-outline"
-                >
-                  Từ chối
-                </button>
-                <button 
-                  onClick={() => handleNotificationAction(currentNotification.id, 'accept')}
-                  className="btn"
-                >
-                  Xác nhận
-                </button>
+                {currentNotification.processing ? (
+                  <span className="text-gray-500">Đang xử lý...</span>
+                ) : currentNotification.action || currentNotification.transferStatus ? (
+                  <div className="flex space-x-3">
+                    <span className="text-gray-500 self-center">
+                      Đã {(currentNotification.action === 'accept' || currentNotification.transferStatus === 'accepted') ? 'chấp nhận' : 'từ chối'}
+                    </span>
+                    <button 
+                      onClick={() => {
+                        setShowModal(false);
+                      }}
+                      className="btn"
+                    >
+                      Đóng
+                    </button>
+                  </div>
+                ) : currentNotification.read ? (
+                  <div className="flex space-x-3">
+                    <span className="text-gray-500 self-center">Đã xử lý</span>
+                    <button 
+                      onClick={() => {
+                        setShowModal(false);
+                      }}
+                      className="btn"
+                    >
+                      Đóng
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <button 
+                      onClick={() => handleNotificationAction(currentNotification.id, 'reject')}
+                      className="btn-outline disabled:opacity-50"
+                      disabled={currentNotification.processing || currentNotification.read}
+                    >
+                      Từ chối
+                    </button>
+                    <button 
+                      onClick={() => handleNotificationAction(currentNotification.id, 'accept')}
+                      className="btn disabled:opacity-50"
+                      disabled={currentNotification.processing || currentNotification.read}
+                    >
+                      Xác nhận
+                    </button>
+                  </>
+                )}
               </div>
             ) : (
               <div className="flex justify-end">

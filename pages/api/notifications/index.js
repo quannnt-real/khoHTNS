@@ -23,16 +23,31 @@ export default async function handler(req, res) {
     }
     
     const { userId } = decoded;
+    const { limit, page, pageSize } = req.query;
+    
+    // Xác định limit, pagination nếu có
+    const take = limit ? parseInt(limit) : pageSize ? parseInt(pageSize) : undefined;
+    const skip = page && pageSize ? (parseInt(page) - 1) * parseInt(pageSize) : undefined;
+    
+    // Lấy tổng số thông báo (cho pagination)
+    const total = await prisma.notification.count({
+      where: { userId }
+    });
     
     // Lấy các thông báo của người dùng
     const notifications = await prisma.notification.findMany({
       where: { userId },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: take,
+      skip: skip
     });
     
     return res.status(200).json({
       success: true,
-      notifications
+      notifications,
+      total,
+      page: page ? parseInt(page) : 1,
+      pageSize: pageSize ? parseInt(pageSize) : notifications.length
     });
   } catch (error) {
     console.error('Error getting notifications:', error);

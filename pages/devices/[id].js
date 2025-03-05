@@ -36,6 +36,7 @@ export default function DeviceDetail() {
   const [requestSuccess, setRequestSuccess] = useState(false);
   // Thêm state cho yêu cầu đang chờ xử lý
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [checkTwoPerson, setCheckTwoPerson] = useState(false);
   
   useEffect(() => {
     // Add logging
@@ -66,25 +67,68 @@ export default function DeviceDetail() {
   useEffect(() => {
     if (currentUser && id) {
       fetchPendingRequests();
+      
+      // Set up polling interval to refresh pending requests periodically
+      const intervalId = setInterval(() => {
+        fetchPendingRequests();
+      }, 10000); // Refresh every 10 seconds
+      
+      return () => clearInterval(intervalId); // Clean up on unmount
     }
   }, [currentUser, id]);
 
-  // Thêm useEffect mới để kiểm tra quyền trả
+  // Thêm useEffect mới để kiểm tra quyền trả - chỉ người đang giữ thiết bị mới thấy nút trả
   useEffect(() => {
     if (device && currentUser) {
-      // Kiểm tra quyền trả
-      const userCanReturn = 
-        // User là người mượn
-        (device.borrower && device.borrower.id === currentUser.id) || 
-        // Hoặc là người được chuyển thiết bị
-        (device.borrowHistory && 
-        device.borrowHistory.length > 0 && 
-        device.borrowHistory[0].transferTo && 
-        device.borrowHistory[0].transferTo.id === currentUser.id);
+      // Kiểm tra người mượn ban đầu
+      let isOriginalBorrower = device.borrower && device.borrower.id === currentUser.id;
+      
+      // Kiểm tra nếu đã chuyển cho người khác và đã được xác nhận
+      let hasBeenTransferred = false;
+      if (device.borrowHistory && device.borrowHistory.length > 0) {
+        const lastHistory = device.borrowHistory[0];
+        // Nếu có transferTo và đã xác nhận (có returnDate), thì người được chuyển là người giữ thiết bị
+        if (lastHistory.transferTo && lastHistory.returnDate) {
+          hasBeenTransferred = true;
+          isOriginalBorrower = false; // Người mượn ban đầu không còn giữ thiết bị
+        }
+      }
+      
+      // Người hiện tại đang giữ thiết bị là người được chuyển
+      const isCurrentHolder = device.borrowHistory && 
+                           device.borrowHistory.length > 0 && 
+                           device.borrowHistory[0].transferTo && 
+                           device.borrowHistory[0].transferTo.id === currentUser.id && 
+                           device.borrowHistory[0].returnDate; // Đã xác nhận chuyển
+      
+      // Người có quyền trả là người đang giữ thiết bị: 
+      // hoặc là người mượn ban đầu (nếu chưa chuyển), 
+      // hoặc là người được chuyển (nếu đã chuyển và xác nhận)
+      const userCanReturn = (isOriginalBorrower && !hasBeenTransferred) || isCurrentHolder;
       
       setCanReturn(userCanReturn);
     }
   }, [device, currentUser]);
+  
+  // Hàm kiểm tra email người mượn
+  const checkBorrowerEmail = async (borrowerId) => {
+    if (!borrowerId) return null;
+    
+    try {
+      // Lấy thông tin đầy đủ của người mượn từ API
+      const response = await fetch(`/api/users/${borrowerId}`);
+      
+      if (!response.ok) {
+        console.error('Failed to fetch borrower information');
+        return null;
+      }
+      
+      return await response.json();
+    } catch (err) {
+      console.error('Error checking borrower email:', err);
+      return null;
+    }
+  };
   
   const fetchDevice = async () => {
     try {
@@ -318,8 +362,14 @@ export default function DeviceDetail() {
     setRequestSuccess(false);
     
     try {
-      // Kiểm tra xem người mượn hiện tại có email không
-      if (!device.borrower || !device.borrower.email) {
+      // Kiểm tra xem thiết bị có đang được mượn không
+      if (!device.borrower) {
+        throw new Error('Thiết bị này chưa được ai mượn.');
+      }
+      
+      // Kiểm tra người mượn trong dữ liệu đầy đủ
+      const borrower = await checkBorrowerEmail(device.borrowerId);
+      if (!borrower || !borrower.email) {
         throw new Error('Người đang mượn thiết bị không có email để nhận thông báo xác nhận.');
       }
       
@@ -388,6 +438,10 @@ export default function DeviceDetail() {
     try {
       setActionLoading(true);
       
+      // Tạm thời xóa yêu cầu khỏi UI để tránh xử lý kép
+      const request = pendingRequests.find(req => req.id === requestId);
+      setPendingRequests(prev => prev.filter(req => req.id !== requestId));
+      
       const response = await fetch('/api/transfers/confirm', {
         method: 'POST',
         headers: {
@@ -402,12 +456,38 @@ export default function DeviceDetail() {
       const data = await response.json();
       
       if (!response.ok) {
+        // Nếu có lỗi, khôi phục lại yêu cầu trong UI
+        setPendingRequests(prev => [...prev, request].sort((a, b) => 
+          new Date(b.createdAt) - new Date(a.createdAt)
+        ));
         throw new Error(data.message || 'Có lỗi xảy ra khi xử lý yêu cầu');
       }
       
+      // Đánh dấu thông báo liên quan là đã đọc (nếu có)
+      if (request) {
+        try {
+          // Gửi yêu cầu để tìm và đánh dấu các thông báo liên quan
+          const token = localStorage.getItem('token');
+          if (token) {
+            await fetch(`/api/notifications/mark-by-request`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                requestId: requestId
+              })
+            });
+          }
+        } catch (e) {
+          console.error('Error marking notifications as read:', e);
+        }
+      }
+      
       // Cập nhật lại dữ liệu thiết bị và yêu cầu đang chờ
-      fetchDevice();
-      fetchPendingRequests();
+      await fetchDevice();
+      await fetchPendingRequests();
       
       // Hiển thị thông báo
       alert(action === 'accept' ? 'Đã xác nhận yêu cầu thành công!' : 'Đã từ chối yêu cầu!');
@@ -505,7 +585,8 @@ export default function DeviceDetail() {
                     </span>
                   )}
                   
-                  {device.borrowHistory && device.borrowHistory.length > 0 && device.borrowHistory[0].transferTo && (
+                  {device.borrowHistory && device.borrowHistory.length > 0 && 
+                   device.borrowHistory[0].transferTo && device.borrowHistory[0].returnDate && (
                     <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
                       Đã Chuyển
                     </span>
@@ -590,7 +671,9 @@ export default function DeviceDetail() {
                     </div>
                   )}
                   
-                  {device.borrowHistory && device.borrowHistory.length > 0 && device.borrowHistory[0].transferTo && (
+                  {/* Hiển thị thông tin đã chuyển thiết bị khi có returnDate (đã xác nhận) */}
+                  {device.borrowHistory && device.borrowHistory.length > 0 && 
+                   device.borrowHistory[0].transferTo && device.borrowHistory[0].returnDate && (
                     <div>
                       <p className="text-sm text-gray-600 font-medium">Đã chuyển cho:</p>
                       <p className="text-sm text-gray-800">
@@ -598,88 +681,9 @@ export default function DeviceDetail() {
                       </p>
                     </div>
                   )}
+                  
                 </div>
                 
-                {/* Hiển thị yêu cầu đang chờ xử lý */}
-                {pendingRequests && pendingRequests.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-blue-200">
-                    <div className="flex items-center mb-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                      </svg>
-                      <h3 className="text-md font-semibold text-gray-900">Yêu cầu đang chờ xử lý</h3>
-                      <span className="ml-2 px-2 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-full">{pendingRequests.length}</span>
-                    </div>
-                    
-                    <div className="pl-7 space-y-3">
-                      {pendingRequests.map(request => {
-                        // Xác định loại yêu cầu (chuyển/mượn) và thông tin liên quan
-                        const isTransfer = !!request.transferTo;
-                        let requestType, requesterName, recipientName;
-                        
-                        if (isTransfer) {
-                          requestType = "Chuyển thiết bị";
-                          requesterName = request.user.name;
-                          recipientName = request.transferTo.name;
-                        } else {
-                          requestType = "Yêu cầu mượn";
-                          requesterName = request.user.name;
-                          recipientName = request.transferFrom ? request.transferFrom.name : 'N/A';
-                        }
-                        
-                        return (
-                          <div key={request.id} className="bg-white p-3 rounded-md border border-blue-100 shadow-sm">
-                            <div className="flex justify-between items-center">
-                              <div>
-                                <span className="inline-block px-2 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-md mb-1">{requestType}</span>
-                                <p className="text-sm font-medium">
-                                  {isTransfer ? 
-                                    `${requesterName} muốn chuyển thiết bị cho ${recipientName}` : 
-                                    `${requesterName} muốn mượn thiết bị từ ${recipientName}`}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  Yêu cầu: {new Date(request.createdAt).toLocaleDateString('vi-VN', {
-                                    year: 'numeric',
-                                    month: 'numeric',
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  })}
-                                </p>
-                              </div>
-                              
-                              {/* Các nút hành động nếu người dùng hiện tại là người cần xác nhận */}
-                              {((isTransfer && currentUser.id === request.transferTo?.id) || 
-                                (!isTransfer && currentUser.id === request.transferFrom?.id)) && (
-                                <div className="flex space-x-2">
-                                  <button 
-                                    onClick={() => handleConfirmRequest(request.id, 'accept')}
-                                    className="px-3 py-1 bg-green-500 text-white text-xs font-medium rounded hover:bg-green-600"
-                                  >
-                                    Xác nhận
-                                  </button>
-                                  <button 
-                                    onClick={() => handleConfirmRequest(request.id, 'reject')}
-                                    className="px-3 py-1 bg-red-500 text-white text-xs font-medium rounded hover:bg-red-600"
-                                  >
-                                    Từ chối
-                                  </button>
-                                </div>
-                              )}
-                              
-                              {/* Trạng thái "Đang chờ" cho người tạo yêu cầu */}
-                              {currentUser.id === request.userId && (
-                                <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded-full">
-                                  Đang chờ xác nhận
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
             
@@ -770,89 +774,101 @@ export default function DeviceDetail() {
                       Người mượn
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ngày mượn
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ngày trả
+                      Thời gian
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Trạng thái
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ghi chú
+                      Chuyển cho
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {device.borrowHistory.map((history) => (
-                    <tr key={history.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{history.user.name}</div>
-                        <div className="text-sm text-gray-500">{history.user.phone}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(history.borrowDate).toLocaleDateString('vi-VN', {
-                          year: 'numeric',
-                          month: 'numeric',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {history.returnDate ? 
-                          new Date(history.returnDate).toLocaleDateString('vi-VN', {
-                            year: 'numeric',
-                            month: 'numeric',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          }) : '—'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {history.returnDate ? (
-                          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
-                            Đã trả
-                          </span>
-                        ) : history.transferTo ? (
-                          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
-                            Đã chuyển
-                          </span>
-                        ) : (
-                          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
-                            Đang mượn
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {history.event ? (
-                        <div className="flex items-center">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                          </svg>
-                          <span>Mượn cho sự kiện: <span className="font-medium">{history.event.title}</span></span>
-                        </div>
-                      ) : history.transferTo ? (
-                        <div className="flex items-center">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-purple-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8z" />
-                            <path d="M12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z" />
-                          </svg>
-                          <span>Chuyển cho {history.transferTo.name}</span>
-                        </div>
-                      ) : history.returnDate ? (
-                        <div className="flex items-center">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                          <span>Trả đúng hạn</span>
-                        </div>
-                      ) : (
-                        '—'
-                      )}
-                      </td>
-                    </tr>
-                  ))}
+                  {(() => {
+                    // Mảng lưu các bản ghi lịch sử sau khi xử lý
+                    const processedHistories = [];
+                    
+                    // Xử lý từng bản ghi gốc để tạo các bản ghi hiển thị
+                    device.borrowHistory.forEach(history => {
+                      // 1. Bản ghi Mượn - luôn tạo từ mọi bản ghi lịch sử
+                      processedHistories.push({
+                        id: `borrow-${history.id}`,
+                        type: 'borrow',
+                        user: history.user,
+                        time: history.borrowDate,
+                        transferTo: null
+                      });
+                      
+                      // 2. Bản ghi Trả - tạo nếu có returnDate và không phải là chuyển
+                      if (history.returnDate && !history.transferTo) {
+                        processedHistories.push({
+                          id: `return-${history.id}`,
+                          type: 'return',
+                          user: history.user,
+                          time: history.returnDate,
+                          transferTo: null
+                        });
+                      }
+                      
+                      // 3. Bản ghi Chuyển - tạo nếu có returnDate và có thông tin chuyển
+                      if (history.returnDate && history.transferTo) {
+                        processedHistories.push({
+                          id: `transfer-${history.id}`,
+                          type: 'transfer',
+                          user: history.user,
+                          time: history.returnDate,
+                          transferTo: history.transferTo
+                        });
+                      }
+                    });
+                    
+                    // Sắp xếp theo thời gian mới nhất trước
+                    return processedHistories
+                      .sort((a, b) => new Date(b.time) - new Date(a.time))
+                      .map(record => (
+                        <tr key={record.id}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">{record.user.name}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {new Date(record.time).toLocaleDateString('vi-VN', {
+                              year: 'numeric',
+                              month: 'numeric',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {record.type === 'return' ? (
+                              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                                Đã trả
+                              </span>
+                            ) : record.type === 'transfer' ? (
+                              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
+                                Chuyển
+                              </span>
+                            ) : (
+                              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
+                                Mượn
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {record.transferTo ? (
+                              <div className="flex items-center">
+                                <span>
+                                  <strong>{record.transferTo.name}</strong>
+                                </span>
+                              </div>
+                            ) : (
+                              <>—</>
+                            )}
+                          </td>
+                        </tr>
+                      ));
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -1058,7 +1074,7 @@ export default function DeviceDetail() {
               <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-md text-sm">
                 <div className="flex">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-  0 1 1 0 01  0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-  0 1 1 0 01  0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
                   <span>{actionError}</span>
                 </div>
