@@ -1,5 +1,5 @@
 import { prisma } from '../../../lib/prisma';
-import { sendEmail, generateNotificationEmail } from '../../../lib/emailService';
+import { sendEmail, generateNotificationEmail } from '../../../lib/emailProvider';
 import { sendNotificationToUser } from '../../../lib/socketService';
 
 export default async function handler(req, res) {

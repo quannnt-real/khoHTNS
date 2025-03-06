@@ -17,6 +17,10 @@
 /public/uploads/
 /public/user-content/
 
+# Credentials and tokens
+/credentials/credentials.json
+/tokens/token.json
+
 # Log files
 *.log
 npm-debug.log*

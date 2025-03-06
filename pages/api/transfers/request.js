@@ -1,5 +1,5 @@
 import { prisma } from '../../../lib/prisma';
-import { sendEmail, generateTransferRequestEmail, generateBorrowRequestEmail } from '../../../lib/emailService';
+import { sendEmail, generateTransferRequestEmail, generateBorrowRequestEmail } from '../../../lib/emailProvider';
 import { verifyToken } from '../../../lib/auth';
 import { sendNotificationToUser } from '../../../lib/socketService';
 

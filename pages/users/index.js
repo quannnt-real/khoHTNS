@@ -120,7 +120,7 @@ export default function Users() {
       setShowAddForm(false);
       setError('');
       // Làm mới danh sách người dùng
-      await fetchUsers();
+      fetchUsers();
 
       // Hiển thị thông báo hệ thống
       setSystemMessage('Người dùng đã được tạo thành công!');
