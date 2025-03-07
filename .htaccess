@@ -1,0 +1,10 @@
+RewriteEngine On
+
+# Đầu tiên xử lý API - rất quan trọng để đặt trước các quy tắc khác
+RewriteCond %{REQUEST_URI} ^/api/ [NC]
+RewriteRule ^api/(.*)$ http://localhost:3002/api/$1 [P,L]
+
+# Sau đó xử lý các request frontend
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ http://localhost:3001/$1 [P,L]

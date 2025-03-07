@@ -13,6 +13,10 @@ const nextConfig = {
     ],
     unoptimized: true, // Tắt tối ưu hóa hình ảnh để hiển thị hình ảnh từ thư mục uploads
   },
+  experimental: {
+    workerThreads: true, // worker threads để giảm tải spawn child process
+    cpus: 1, // Giới hạn số lượng CPU sử dụng
+  },
 }
 
 module.exports = nextConfig
