@@ -2,52 +2,46 @@ import { IncomingForm } from 'formidable';
 import fs from 'fs';
 import { processAndSaveImage } from '../../../lib/imageProcessing';
 
-// Configure Next.js to handle file uploads
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+export const config = { api: { bodyParser: false } };
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Parse the incoming form data
+  // Sử dụng một mẫu nhỏ gọn hơn
   const form = new IncomingForm({
     keepExtensions: true,
     multiples: true,
   });
 
   try {
-    const { fields, files } = await new Promise((resolve, reject) => {
+    // Tối ưu code xử lý form
+    const [fields, files] = await new Promise((resolve, reject) => {
       form.parse(req, (err, fields, files) => {
         if (err) return reject(err);
-        resolve({ fields, files });
+        resolve([fields, files]);
       });
     });
 
-    // Get the image file
-    const file = Array.isArray(files.image) ? files.image[0] : files.image; // 'image' is the field name in the form
-    
-    if (!file) {
-      return res.status(400).json({ error: 'No image uploaded' });
-    }
+    const file = files.image && (Array.isArray(files.image) ? files.image[0] : files.image);
+    if (!file) return res.status(400).json({ error: 'No image uploaded' });
 
-    // Read the file buffer
+    // console.log('Processing file:', file.originalFilename, 'type:', file.mimetype);
+
+    // Đọc và xử lý ảnh
     const fileBuffer = await fs.promises.readFile(file.filepath);
-    
-    // Process and save the image
     const imagePath = await processAndSaveImage(fileBuffer, file.originalFilename);
     
-    // Clean up the temporary file
-    await fs.promises.unlink(file.filepath);
+    // Xóa file tạm
+    await fs.promises.unlink(file.filepath).catch(console.error);
 
-    // Return the image path to be stored in the database
     return res.status(200).json({ imagePath });
   } catch (error) {
-    console.error('Error processing image upload:', error);
-    return res.status(500).json({ error: 'Error processing image upload' });
+    console.error('Error processing upload:', error);
+    return res.status(500).json({ 
+      error: 'Error processing image upload', 
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 }
