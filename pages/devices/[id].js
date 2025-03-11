@@ -501,8 +501,9 @@ export default function DeviceDetail() {
   
   if (isLoading) {
     return (
-      <div className="text-center py-8">
-        <p>Loading device details...</p>
+      <div className="flex flex-col items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+        <p className="text-gray-600">Đang tải thông tin thiết bị...</p>
       </div>
     );
   }
@@ -534,10 +535,18 @@ export default function DeviceDetail() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">{device.name}</h1>
         <div className="flex space-x-2">
+          <button
+            onClick={fetchDevice}
+            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-full"
+            title="Refresh device data"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
           <Link href={`/devices/edit/${id}`} className="btn-secondary">
             Edit
           </Link>
-          {/* Chỉ hiển thị nút Delete khi người dùng là admin */}
           {isAdmin && (
             <button onClick={handleDeleteDevice} className="btn-danger">
               Delete
@@ -550,20 +559,24 @@ export default function DeviceDetail() {
       </div>
       
       <div className="bg-white rounded-lg shadow-sm overflow-hidden mb-8">
-        <div className="md:flex">
-          <div className="md:w-1/3 relative h-64 md:h-auto">
+        <div className="flex flex-col md:flex-row">
+          <div className="w-full md:w-1/3 relative h-64 md:h-auto">
             {device.image ? (
-              <Image 
-                src={device.image}
-                alt={device.name}
-                className="object-cover h-full w-full"
-                width={400}
-                height={300}
-                unoptimized={true}
-              />
+              <div className="relative h-full w-full">
+                <Image 
+                  src={device.image}
+                  alt={device.name}
+                  className="object-cover"
+                  fill
+                  unoptimized={true}
+                />
+              </div>
             ) : (
               <div className="h-full w-full bg-gray-100 flex items-center justify-center">
-                <p className="text-gray-400">No image available</p>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p className="text-gray-400 absolute bottom-4">No image available</p>
               </div>
             )}
           </div>
@@ -765,112 +778,118 @@ export default function DeviceDetail() {
       {device.borrowHistory && device.borrowHistory.length > 0 && (
         <div className="mt-8">
           <h2 className="text-xl font-bold mb-4">Lịch sử mượn trả</h2>
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Người mượn
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Thời gian
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Trạng thái
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Chuyển cho
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {(() => {
-                    // Mảng lưu các bản ghi lịch sử sau khi xử lý
-                    const processedHistories = [];
-                    
-                    // Xử lý từng bản ghi gốc để tạo các bản ghi hiển thị
-                    device.borrowHistory.forEach(history => {
-                      // 1. Bản ghi Mượn - luôn tạo từ mọi bản ghi lịch sử
-                      processedHistories.push({
-                        id: `borrow-${history.id}`,
-                        type: 'borrow',
-                        user: history.user,
-                        time: history.borrowDate,
-                        transferTo: null
-                      });
-                      
-                      // 2. Bản ghi Trả - tạo nếu có returnDate và không phải là chuyển
-                      if (history.returnDate && !history.transferTo) {
-                        processedHistories.push({
-                          id: `return-${history.id}`,
-                          type: 'return',
-                          user: history.user,
-                          time: history.returnDate,
-                          transferTo: null
-                        });
-                      }
-                      
-                      // 3. Bản ghi Chuyển - tạo nếu có returnDate và có thông tin chuyển
-                      if (history.returnDate && history.transferTo) {
-                        processedHistories.push({
-                          id: `transfer-${history.id}`,
-                          type: 'transfer',
-                          user: history.user,
-                          time: history.returnDate,
-                          transferTo: history.transferTo
-                        });
-                      }
+          <div className="bg-white rounded-lg shadow-sm overflow-hidden p-6">
+            <div className="relative">
+              {(() => {
+                // Mảng lưu các bản ghi lịch sử sau khi xử lý
+                const processedHistories = [];
+                
+                // Xử lý từng bản ghi gốc để tạo các bản ghi hiển thị
+                device.borrowHistory.forEach(history => {
+                  // Process history records as before...
+                  processedHistories.push({
+                    id: `borrow-${history.id}`,
+                    type: 'borrow',
+                    user: history.user,
+                    time: history.borrowDate,
+                    transferTo: null
+                  });
+                  
+                  if (history.returnDate && !history.transferTo) {
+                    processedHistories.push({
+                      id: `return-${history.id}`,
+                      type: 'return',
+                      user: history.user,
+                      time: history.returnDate,
+                      transferTo: null
                     });
-                    
-                    // Sắp xếp theo thời gian mới nhất trước
-                    return processedHistories
-                      .sort((a, b) => new Date(b.time) - new Date(a.time))
-                      .map(record => (
-                        <tr key={record.id}>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">{record.user.name}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {new Date(record.time).toLocaleDateString('vi-VN', {
-                              year: 'numeric',
-                              month: 'numeric',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            {record.type === 'return' ? (
-                              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
-                                Đã trả
+                  }
+                  
+                  if (history.returnDate && history.transferTo) {
+                    processedHistories.push({
+                      id: `transfer-${history.id}`,
+                      type: 'transfer',
+                      user: history.user,
+                      time: history.returnDate,
+                      transferTo: history.transferTo
+                    });
+                  }
+                });
+                
+                // Sắp xếp theo thời gian mới nhất trước
+                return processedHistories
+                  .sort((a, b) => new Date(b.time) - new Date(a.time))
+                  .map((record, index) => (
+                    <div key={record.id} className="mb-6 relative">
+                      {/* Vertical timeline line - adjusted to connect properly */}
+                      {index < processedHistories.length - 1 && (
+                        <div className="absolute top-3 left-3 h-[calc(100%+2rem)] w-0.5 bg-gray-200"></div>
+                      )}
+                      
+                      <div className="flex items-center">
+                        {/* Timeline dot */}
+                        <div className={`relative z-10 rounded-full h-6 w-6 flex items-center justify-center mr-4 flex-shrink-0 
+                          ${record.type === 'borrow' ? 'bg-yellow-100 text-yellow-600 border border-yellow-300' : 
+                            record.type === 'return' ? 'bg-green-100 text-green-600 border border-green-300' :
+                            'bg-purple-100 text-purple-600 border border-purple-300'}`}>
+                          {record.type === 'borrow' ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1z" clipRule="evenodd" />
+                              <path fillRule="evenodd" d="M10 5a1 1 0 011 1v8a1 1 0 11-2 0V6a1 1 0 011-1z" clipRule="evenodd" />
+                            </svg>
+                          ) : record.type === 'return' ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8z" />
+                              <path d="M12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z" />
+                            </svg>
+                          )}
+                        </div>
+                        
+                        <div className={`bg-gray-50 p-4 rounded-lg shadow-sm w-full transition-all duration-300 ease-in-out
+                          ${record.type === 'borrow' 
+                            ? 'hover:bg-white hover:ring-2 hover:ring-yellow-200 hover:shadow-lg'
+                            : record.type === 'return' 
+                            ? 'hover:bg-white hover:ring-2 hover:ring-green-200 hover:shadow-lg'
+                            : 'hover:bg-white hover:ring-2 hover:ring-purple-200 hover:shadow-lg'}`}>
+                          <div className="flex justify-between items-center mb-2">
+                            <div>
+                              <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold
+                                ${record.type === 'borrow' ? 'bg-yellow-100 text-yellow-800' : 
+                                  record.type === 'return' ? 'bg-green-100 text-green-800' :
+                                  'bg-purple-100 text-purple-800'}`}>
+                                {record.type === 'borrow' ? 'Mượn' : 
+                                 record.type === 'return' ? 'Đã trả' : 'Chuyển'}
                               </span>
-                            ) : record.type === 'transfer' ? (
-                              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
-                                Chuyển
-                              </span>
-                            ) : (
-                              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
-                                Mượn
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {record.transferTo ? (
-                              <div className="flex items-center">
-                                <span>
-                                  <strong>{record.transferTo.name}</strong>
-                                </span>
-                              </div>
-                            ) : (
-                              <>—</>
-                            )}
-                          </td>
-                        </tr>
-                      ));
-                  })()}
-                </tbody>
-              </table>
+                              <span className="text-sm text-gray-600 ml-2">{record.user.name}</span>
+                            </div>
+                            <span className="text-xs text-gray-500">
+                              {new Date(record.time).toLocaleDateString('vi-VN', {
+                                year: 'numeric',
+                                month: 'numeric',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          
+                          {record.transferTo && (
+                            <div className="mt-2 flex items-center text-sm">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-purple-500 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                              </svg>
+                              Chuyển cho: <span className="font-medium ml-1">{record.transferTo.name}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ));
+              })()}
             </div>
           </div>
         </div>
@@ -919,8 +938,8 @@ export default function DeviceDetail() {
                 <div className="flex">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                  <span>{actionError}</span>
+                </svg>
+                <span>{actionError}</span>
                 </div>
               </div>
             )}
