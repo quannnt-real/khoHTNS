@@ -1,7 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Image from 'next/image';
 import Link from 'next/link';
+import { debounce, SimpleCache } from '../../lib/utils';
+
+// Create cache instances
+const pendingRequestsCache = new SimpleCache(30000); // 30 seconds TTL
+const deviceCache = new SimpleCache(60000); // 1 minute TTL for device data
 
 export default function DeviceDetail() {
   const router = useRouter();
@@ -68,10 +73,13 @@ export default function DeviceDetail() {
     if (currentUser && id) {
       fetchPendingRequests();
       
-      // Set up polling interval to refresh pending requests periodically
+      // Set up polling interval with reduced frequency to avoid CPU overload
       const intervalId = setInterval(() => {
-        fetchPendingRequests();
-      }, 10000); // Refresh every 10 seconds
+        // Only poll if document is visible to avoid unnecessary API calls
+        if (!document.hidden) {
+          fetchPendingRequests();
+        }
+      }, 60000); // Reduced from 10s to 60s to decrease server load
       
       return () => clearInterval(intervalId); // Clean up on unmount
     }

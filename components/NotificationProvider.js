@@ -1,9 +1,13 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { useRouter } from 'next/router';
+import { debounce, SimpleCache } from '../lib/utils';
 
 // Create context for notifications
 const NotificationContext = createContext();
+
+// Create cache instance for notifications
+const notificationCache = new SimpleCache(30000); // 30 seconds TTL
 
 export function NotificationProvider({ children }) {
   const [socket, setSocket] = useState(null);
@@ -13,9 +17,17 @@ export function NotificationProvider({ children }) {
   const [currentNotification, setCurrentNotification] = useState(null);
   const router = useRouter();
 
-  // Lấy thông báo từ API khi component mount
-  useEffect(() => {
-    const fetchNotifications = async () => {
+  // Debounced version of fetchNotifications to prevent excessive API calls
+  const debouncedFetchNotifications = useCallback(
+    debounce(async () => {
+      // Check cache first
+      const cached = notificationCache.get('notifications');
+      if (cached) {
+        setNotifications(cached.notifications);
+        setUnreadCount(cached.unreadCount);
+        return;
+      }
+
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
@@ -34,21 +46,29 @@ export function NotificationProvider({ children }) {
             new Date(b.createdAt) - new Date(a.createdAt)
           );
           
+          const unreadCount = sortedNotifications.filter(n => !n.read).length;
+          
+          // Cache the result
+          notificationCache.set('notifications', {
+            notifications: sortedNotifications,
+            unreadCount
+          });
+          
           setNotifications(sortedNotifications);
-          setUnreadCount(sortedNotifications.filter(n => !n.read).length);
+          setUnreadCount(unreadCount);
         }
       } catch (error) {
         console.error('Error fetching notifications:', error);
       }
-    };
+    }, 1000), // Debounce for 1 second
+    []
+  );
 
-    fetchNotifications();
-    
-    // Thiết lập interval để cập nhật thông báo mỗi 30 giây
-    const intervalId = setInterval(fetchNotifications, 30000);
-    
-    return () => clearInterval(intervalId);
-  }, []);
+  // Lấy thông báo từ API khi component mount (một lần duy nhất)
+  useEffect(() => {
+    // Chỉ fetch một lần khi mount, Socket.IO sẽ xử lý real-time updates
+    debouncedFetchNotifications();
+  }, [debouncedFetchNotifications]);
 
   // Thiết lập Socket.IO khi component mount
   useEffect(() => {
@@ -65,6 +85,9 @@ export function NotificationProvider({ children }) {
 
     socketInstance.on('notification', (notification) => {
       console.log('Received notification:', notification);
+      
+      // Clear cache when new notification arrives
+      notificationCache.clear();
       
       // Kiểm tra trùng lặp thông báo trước khi thêm
       setNotifications(prev => {
